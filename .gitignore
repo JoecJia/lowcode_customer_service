@@ -1,0 +1,17 @@
+# Git Ignore File for Customer Service Project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+
+# Local sync scripts (optional to ignore)
+# sync_project.ps1
