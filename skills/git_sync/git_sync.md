@@ -9,7 +9,7 @@
 - 用户说：“同步项目”
 
 ## 执行方式
-该能力目前通过运行本地脚本 `sync_project.ps1` 实现。该脚本已配置远程仓库：`https://github.com/JoecJia/lowcode_customer_service.git`。
+该能力目前通过运行脚本 `skills/git_sync/sync_project.ps1` 实现。该脚本已配置远程仓库：`https://github.com/JoecJia/lowcode_customer_service.git`。
 
 ## 注意事项
 1. **前提条件**：系统必须安装 Git 并配置好 GitHub 访问权限（建议配置 SSH 或使用 Token）。

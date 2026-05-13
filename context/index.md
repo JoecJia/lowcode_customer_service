@@ -17,6 +17,10 @@
   - 路径: `context/faq/`
   - 索引内容:
     - [常见问题](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/context/faq/general_faq.md): 包含忘记密码、重置密码、数据导出、Excel/CSV格式、AI填充准确度优化。
+- **项目同步 (Git Sync)**
+  - 路径: `skills/git_sync/`
+  - 索引内容:
+    - [项目同步](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/skills/git_sync/git_sync.md): 包含上传改动、下载文档、同步项目、GitHub 配置。
 
 ## 检索说明
 1. 检索时先匹配“索引内容”中的关键词。

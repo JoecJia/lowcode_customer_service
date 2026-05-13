@@ -3,7 +3,12 @@ param (
     [string]$CommitMessage = "Update"
 )
 
-Write-Host ">>> Checking Git status..."
+# 切换到项目根目录
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+Set-Location $ProjectRoot
+
+Write-Host ">>> Checking Git status in $ProjectRoot..."
 
 # 1. Initialize if .git folder doesn't exist
 if (-not (Test-Path ".git")) {

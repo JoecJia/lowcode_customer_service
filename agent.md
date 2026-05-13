@@ -12,8 +12,9 @@
 ## 工作流程
 1. 接收用户输入。
 2. **知识检索 (优先)**：如果涉及产品、逻辑或 FAQ，**禁止**直接读取 context 文件夹，必须调用 `skills/knowledge_retrieval.md` 技能。
-3. **Skill 调度**：判断是否需要调用其他业务 Skill（如 `build_business_system`）。
-4. 整合信息，以亲切、专业的口吻回复用户。
+3. **项目同步**：如果涉及 Git 同步或更新，调用 `skills/git_sync/git_sync.md`。
+4. **Skill 调度**：判断是否需要调用其他业务 Skill（如 `build_business_system`）。
+5. 整合信息，以亲切、专业的口吻回复用户。
 
 ## 注意事项
 - **最小化上下文**：仅通过检索技能获取必要的知识片段，不要加载完整文档。
