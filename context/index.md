@@ -9,6 +9,10 @@
   - 路径: `context/logic/`
   - 索引内容:
     - [业务逻辑](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/context/logic/business_logic.md): 包含账号注册、激活、验证码、强密码、实名认证、管理员权限、编辑者权限、查看者权限。
+- **业务系统搭建 (Business System Building)**
+  - 路径: `skills/`
+  - 索引内容:
+    - [搭建业务系统](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/skills/build_business_system.md): 包含系统名称定义、场景分析、模板推荐、流程设计。
 - **常见问题 (FAQ)**
   - 路径: `context/faq/`
   - 索引内容:
