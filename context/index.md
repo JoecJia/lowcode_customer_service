@@ -17,6 +17,10 @@
   - 路径: `context/faq/`
   - 索引内容:
     - [常见问题](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/context/faq/general_faq.md): 包含忘记密码、重置密码、数据导出、Excel/CSV格式、AI填充准确度优化。
+- **临时内容 (Temporary Context)**
+  - 路径: `context/temporary/`
+  - 索引内容:
+    - [临时笔记](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/temporary/temp_notes.md): 存放每日产生的临时记录、待处理灵感及业务反馈。
 - **项目同步 (Git Sync)**
   - 路径: `skills/git_sync/`
   - 索引内容:
