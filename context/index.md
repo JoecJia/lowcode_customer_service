@@ -6,6 +6,7 @@
   - 索引内容:
     - [产品介绍](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/context/product_docs/product_intro.md): 包含核心功能、零代码建表、AI填充、多端适配、流程自动化。
     - [公式编辑使用指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/formula_guide.md): 包含公式编辑定义、使用流程、函数分类（数学、文本、日期、逻辑等）及注意事项。
+    - [业务流程管理使用手册](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/business_process_management.md): 包含连通器管理、用户管理、组织架构管理、常见问题及视频演示案例。
 - **业务逻辑 (Logic)**
   - 路径: `context/logic/`
   - 索引内容:
@@ -26,9 +27,9 @@
   - 索引内容:
     - [临时笔记](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/temporary/temp_notes.md): 存放每日产生的临时记录、待处理灵感及业务反馈。
 - **Context 转化与索引管理 (Context Transformation)**
-  - 路径: `skills/`
+  - 路径: `skills/context_transformation/`
   - 索引内容:
-    - [Context 转化](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/context_transformation.md): 自动化将上传文件转为结构化 Context，处理图片/链接，维护索引。
+    - [Context 转化](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/context_transformation/context_transformation.md): 自动化将上传文件转为结构化 Context，处理图片/链接，维护索引。
 - **项目同步 (Git Sync)**
   - 路径: `skills/git_sync/`
   - 索引内容:
