@@ -4,13 +4,19 @@
 - **产品文档 (Product Docs)**
   - 路径: `context/product_docs/`
   - 索引内容:
-    - [产品介绍](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/context/product_docs/product_intro.md): 包含核心功能、零代码建表、AI填充、多端适配、流程自动化。
+    - [产品介绍](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/product_intro.md): 超星低代码平台概览，包含表单、审批、仪表盘、信息查询、数据工厂、聚合表、业务流等核心引擎介绍。
     - [公式编辑使用指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/formula_guide.md): 包含公式编辑定义、使用流程、函数分类（数学、文本、日期、逻辑等）及注意事项。
     - [业务流程管理使用手册](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/business_process_management.md): 包含连通器管理、用户管理、组织架构管理、常见问题及视频演示案例。
+    - [聚合表使用说明](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/aggregation_table.md): 包含进销存场景分析、名词解释、开通方式、创建步骤及操作指南。
+    - [表单使用说明](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/form_usage_guide.md): 包含表单引擎简介、功能优势、创建方式、设计流程及高级设置。
+    - [审批引擎使用手册](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/approval_engine_guide.md): 包含审批流程设计、节点配置、审批权限及常见问题处理。
+    - [图表引擎使用说明](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/chart_engine_guide.md): 包含多维数据分析、各类统计图表（柱状图、饼图、折线图等）配置、数据源设置及布局管理。
+    - [信息查询使用指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/info_query_guide.md): 包含从表单、审批和 Excel 中快速查询信息、多源数据匹配及查询结果展示。
+    - [数据工厂使用指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/data_factory_guide.md): 包含数据加工处理工具、八大核心节点（横向连接、追加合并、分组汇总等）、数据同步及分析流程。
 - **业务逻辑 (Logic)**
   - 路径: `context/logic/`
   - 索引内容:
-    - [业务逻辑](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/context/logic/business_logic.md): 包含账号注册、激活、验证码、强密码、实名认证、管理员权限、编辑者权限、查看者权限。
+    - [业务逻辑](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/logic/business_logic.md): 包含账号注册、激活、验证码、强密码、实名认证、管理员权限、编辑者权限、查看者权限。
 - **业务系统搭建与咨询 (Business System & Consulting)**
   - 路径: `skills/`
   - 索引内容:
@@ -21,7 +27,7 @@
 - **常见问题 (FAQ)**
   - 路径: `context/faq/`
   - 索引内容:
-    - [常见问题](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/context/faq/general_faq.md): 包含忘记密码、重置密码、数据导出、Excel/CSV格式、AI填充准确度优化。
+    - [常见问题](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/faq/general_faq.md): 包含忘记密码、重置密码、数据导出、Excel/CSV格式、AI填充准确度优化。
 - **临时内容 (Temporary Context)**
   - 路径: `context/temporary/`
   - 索引内容:
@@ -33,7 +39,7 @@
 - **项目同步 (Git Sync)**
   - 路径: `skills/git_sync/`
   - 索引内容:
-    - [项目同步](file:///d:/Joec's%20code/project-3%EF%BC%9Acustomer_service/skills/git_sync/git_sync.md): 包含上传改动、下载文档、同步项目、GitHub 配置。
+    - [项目同步](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/git_sync/git_sync.md): 包含上传改动、下载文档、同步项目、GitHub 配置。
 
 ## 检索说明
 1. 检索时先匹配“索引内容”中的关键词。

@@ -4,6 +4,86 @@ import os
 import argparse
 import re
 import shutil
+import base64
+import quopri
+
+def handle_alt_chunk(docx, doc_path, abs_assets_dir, assets_dir_rel_to_md):
+    """
+    处理 DOCX 中的 altChunk (通常是 MHT 格式)。
+    """
+    # 1. 查找关系
+    rels_xml_path = 'word/_rels/document.xml.rels'
+    rels_content = docx.read(rels_xml_path)
+    rels_root = ET.fromstring(rels_content)
+    namespaces = {'rel': 'http://schemas.openxmlformats.org/package/2006/relationships'}
+    
+    mht_target = None
+    for rel in rels_root.findall('rel:Relationship', namespaces):
+        if 'aFChunk' in rel.attrib['Type']:
+            mht_target = rel.attrib['Target']
+            break
+            
+    if not mht_target:
+        return None
+
+    # 2. 读取并解析 MHT
+    try:
+        mht_content = docx.read(f'word/{mht_target}').decode('utf-8', errors='ignore')
+    except Exception:
+        return None
+
+    # 简单的 MHT 解析逻辑：提取 HTML 部分和图片部分
+    parts = re.split(r'------=_NextPart_[a-f0-9]+', mht_content)
+    html_content = ""
+    images = {}
+
+    for part in parts:
+        if 'Content-Type: text/html' in part:
+            # 提取 HTML 源码
+            html_body = part.split('\r\n\r\n', 1)[1] if '\r\n\r\n' in part else part
+            # 使用 bytes.fromhex 或者更安全的方式处理，但 MHT 里的 quoted-printable 经常有特殊字符
+            # 先尝试简单处理
+            try:
+                html_content = quopri.decodestring(html_body.encode('ascii', errors='ignore')).decode('utf-8', errors='ignore')
+            except Exception:
+                html_content = html_body # 退而求其次
+        elif 'Content-Type: image/' in part:
+            # 提取图片
+            if '\r\n\r\n' in part:
+                headers, body = part.split('\r\n\r\n', 1)
+                location_match = re.search(r'Content-Location: (.*)', headers)
+                if location_match:
+                    img_id = location_match.group(1).strip()
+                    try:
+                        img_data = base64.b64decode(body.strip())
+                        img_filename = os.path.basename(img_id)
+                        if not img_filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                            img_filename += ".png"
+                        
+                        with open(os.path.join(abs_assets_dir, img_filename), 'wb') as f:
+                            f.write(img_data)
+                        images[img_id] = os.path.join(assets_dir_rel_to_md, img_filename)
+                    except Exception as e:
+                        print(f"Warning: Failed to decode image {img_id}: {e}")
+
+    # 3. 将 HTML 转为 Markdown (非常基础的转换)
+    # 提取标题
+    html_content = re.sub(r'<h([1-6])[^>]*>(.*?)</h\1>', lambda m: f"\n{'#' * int(m.group(1))} {re.sub('<[^>]+>', '', m.group(2))}\n", html_content, flags=re.I|re.S)
+    # 提取段落
+    html_content = re.sub(r'<p[^>]*>(.*?)</p>', lambda m: f"\n{re.sub('<[^>]+>', '', m.group(1))}\n", html_content, flags=re.I|re.S)
+    # 提取图片
+    def replace_img(match):
+        src = re.search(r'src=["\'](.*?)["\']', match.group(0))
+        if src and src.group(1) in images:
+            return f"\n\n![图片说明]({images[src.group(1)]})\n\n"
+        return ""
+    html_content = re.sub(r'<img[^>]+>', replace_img, html_content, flags=re.I)
+    
+    # 清理剩余标签
+    markdown = re.sub(r'<[^>]+>', '', html_content)
+    markdown = re.sub(r'\n\s*\n', '\n\n', markdown)
+    
+    return markdown.strip()
 
 def move_source_file(docx_path):
     """
@@ -47,6 +127,14 @@ def extract_docx_to_markdown(docx_path, output_md_path, assets_dir_rel_to_md):
         os.makedirs(abs_assets_dir)
 
     with zipfile.ZipFile(docx_path, 'r') as docx:
+        # 0. 检查是否为 altChunk (MHT) 格式
+        markdown_content = handle_alt_chunk(docx, docx_path, abs_assets_dir, assets_dir_rel_to_md)
+        if markdown_content:
+            doc_title = os.path.splitext(os.path.basename(docx_path))[0]
+            with open(abs_output_md_path, 'w', encoding='utf-8') as f:
+                f.write(f"# {doc_title}\n\n" + markdown_content)
+            return
+
         # 1. 获取图片关系映射
         rels_content = docx.read(rels_xml_path)
         rels_root = ET.fromstring(rels_content)
