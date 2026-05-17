@@ -22,7 +22,7 @@
   - 索引内容:
     - [搭建业务系统指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/build_business_system.md): 包含系统名称定义、场景分析、模板推荐、流程设计、建设步骤。
     - [产品功能使用方法](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/product_feature_usage.md): 具体功能的操作路径、配置参数及注意事项。
-    - [产品功能使用场景](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/usage_scenarios.md): 各模块的应用价值、适用边界及典型案例。
+    - [产品功能使用案例](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/usage_scenarios.md): 各模块的应用案例、适用场景、功能实现逻辑及关联推荐。
     - [场景方案建议](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/scenario_solutions.md): 根据用户痛点提供“产品组合”整体设计方案。
 - **常见问题 (FAQ)**
   - 路径: `context/faq/`
@@ -36,6 +36,10 @@
   - 路径: `skills/context_transformation/`
   - 索引内容:
     - [Context 转化](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/context_transformation/context_transformation.md): 自动化将上传文件转为结构化 Context，处理图片/链接，维护索引。
+- **信息补充与反问 (Clarifying Questions)**
+  - 路径: `skills/`
+  - 索引内容:
+    - [信息补充与反问](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/skills/clarifying_questions.md): 用户信息不足时的反问机制，包含上下文总结、缺口识别及精准反问。
 - **项目同步 (Git Sync)**
   - 路径: `skills/git_sync/`
   - 索引内容:

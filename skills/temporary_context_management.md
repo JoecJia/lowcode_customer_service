@@ -5,20 +5,27 @@
 
 ## 输入参数
 - `action` (string): 执行的操作，可选值：`record` (记录), `view` (查看), `process` (处理/整理)。
-- `content` (string): 当 `action` 为 `record` 时，需要记录的具体内容。
+- `main_issue` (string): 当 `action` 为 `record` 时，记录的主要问题或核心内容。
+- `needs_context` (boolean): 是否需要后续将其正式记录在永久 Context 中。
+- `record_content` (string): 需要记录的具体细节内容（若是任务日志，则包含大模型回答、用户回答、步骤运行详情等）。
 - `target_category` (string): 当 `action` 为 `process` 时，指定内容迁移到的永久 Context 类别（如 FAQ, Logic, Product Docs）。
 
 ## 执行逻辑
 1. **记录 (record)**：
-   - 将 `content` 附加到 `context/temporary/temp_notes.md` 的“记录区”下方。
-   - 自动添加日期戳。
+   - **动态建档**：根据当前日期生成或定位临时文件，路径为 `context/temporary/temp_notes_YYYYMMDD.md`。
+   - **结构化记录**：在文件中按条记录日志，每条日志必须包含以下格式：
+     - **时间戳**：[HH:mm:ss]
+     - **主要问题/内容**：`{main_issue}`
+     - **是否需入库**：`{needs_context ? "是" : "否"}`
+     - **入库内容**：`{record_content}`
 2. **查看 (view)**：
-   - 读取 `context/temporary/temp_notes.md` 并展示当前所有未处理的记录。
+   - 列出 `context/temporary/` 目录下近期的所有日期文件。
+   - 读取指定日期或今日文件中的未处理记录。
 3. **处理 (process)**：
-   - 提取指定的临时内容。
+   - 提取标记为“需入库”的记录。
    - 根据 `target_category` 将内容改写并合并到对应的永久 Context 文件中。
    - 更新 `context/index.md`（如有必要）。
-   - 从 `context/temporary/temp_notes.md` 中删除已处理的内容。
+   - 处理完成后，在原临时记录中标记为“已处理”。
 
 ## 优势
 - **即时记录**：防止灵感或重要业务细节遗失。
