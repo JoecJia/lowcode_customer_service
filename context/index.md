@@ -13,6 +13,7 @@
     - [图表引擎使用说明](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/chart_engine_guide.md): 包含多维数据分析、各类统计图表（柱状图、饼图、折线图等）配置、数据源设置及布局管理。
     - [信息查询使用指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/info_query_guide.md): 包含从表单、审批和 Excel 中快速查询信息、多源数据匹配及查询结果展示。
     - [数据工厂使用指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/data_factory_guide.md): 包含数据加工处理工具、八大核心节点（横向连接、追加合并、分组汇总等）、数据同步及分析流程。
+    - [办公产品学习资料汇总](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/product_docs/learning_resources_summary.md): 包含各引擎使用说明、更新日志、答疑群信息及培训会议资料。
 - **业务逻辑 (Logic)**
   - 路径: `context/logic/`
   - 索引内容:
@@ -27,7 +28,7 @@
 - **常见问题 (FAQ)**
   - 路径: `context/faq/`
   - 索引内容:
-    - [常见问题](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/faq/general_faq.md): 包含忘记密码、重置密码、数据导出、Excel/CSV格式、AI填充准确度优化。
+    - [常见问题](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/context/faq/general_faq.md): 包含忘记密码、重置密码、数据导出、Excel/CSV格式、AI填充准确度优化、汇总数据查看原始明细。
 - **临时内容 (Temporary Context)**
   - 路径: `context/temporary/`
   - 索引内容:
