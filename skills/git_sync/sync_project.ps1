@@ -1,37 +1,47 @@
-# 极简同步脚本 (Simplified Sync Script)
 param (
-    [string]$CommitMessage = "Update"
+    [ValidateSet("sync", "pull", "push")]
+    [string]$Mode = "sync",
+    [string]$CommitMessage = "Update",
+    [string]$RemoteUrl = "git@github.com:JoecJia/lowcode_customer_service.git"
 )
 
-# 切换到项目根目录
-$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$ErrorActionPreference = "Stop"
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 Set-Location $ProjectRoot
 
-Write-Host ">>> Checking Git status in $ProjectRoot..."
+git --version | Out-Null
 
-# 1. Initialize if .git folder doesn't exist
 if (-not (Test-Path ".git")) {
-    Write-Host "Initializing local repository..."
-    git init
+    git init | Out-Null
 }
 
-# 2. Try to add remote (ignore error if already exists)
-Write-Host "Confirming remote repository..."
-git remote add origin https://github.com/JoecJia/lowcode_customer_service.git 2>$null
+git branch -M main | Out-Null
+$HasOrigin = $true
+try { git remote get-url origin | Out-Null } catch { $HasOrigin = $false }
 
-# 3. Pull remote updates
-Write-Host "Syncing remote documents..."
-git pull origin main --rebase
+if ($HasOrigin) {
+    git remote set-url origin $RemoteUrl | Out-Null
+} else {
+    git remote add origin $RemoteUrl | Out-Null
+}
 
-# 4. Commit local changes
-Write-Host "Saving local changes..."
-git add .
-git commit -m "$CommitMessage"
+if ($Mode -eq "pull") {
+    git pull --rebase --autostash origin main
+    Write-Host ">>> Pull Complete!"
+    exit 0
+}
 
-# 5. Push to GitHub
-Write-Host "Uploading to GitHub..."
-git branch -M main
-git push -u origin main
+$Status = git status --porcelain
+if ($Status) {
+    git add -A
+    git commit -m "$CommitMessage"
+}
 
-Write-Host ">>> Sync Complete!"
+git pull --rebase origin main
+
+if ($Mode -eq "push" -or $Mode -eq "sync") {
+    git push origin main
+    Write-Host ">>> Sync Complete!"
+}

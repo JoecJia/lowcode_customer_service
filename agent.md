@@ -51,7 +51,7 @@
 - [信息补充与反问](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/clarifying_questions.md)：当用户信息不足时，通过反问获取必要信息。
 - [Context 转化与自动化索引](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/context_transformation.md)：处理上传文件、图片识别及索引维护。
 - [临时 Context 管理](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/temporary_context_management.md)：记录无法处理的问题或灵感。
-- [项目同步 (Git Sync)](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/git_sync/git_sync.md)：管理代码和文档的远程同步。
+- [项目同步 (Git Sync)](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/git_sync/git_sync.md)：管理代码和文档的远程同步，支持 Windows/macOS 一键脚本。
 
 ## 注意事项
 - **严禁删除**：在更新过程中，绝对禁止删除或修改 `git_sync`, `temporary_context_management`, `context_transformation`, `knowledge_retrieval` 的核心逻辑。
