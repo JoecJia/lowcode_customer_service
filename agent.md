@@ -69,6 +69,6 @@
 - **每两周或每月**：做一次信息架构整理（合并重复知识、补索引、清理过期内容），并回看回归集的变化趋势。
 
 ### 工程化
-- **同步流程标准化**：统一走 `skills/git_sync/sync_project.ps1` 的 `status/pull/push/sync`，减少手工遗漏。
+- **同步流程标准化**：统一走 `skills/git_sync/sync_project.ps1`（Windows）/ `skills/git_sync/sync_project.sh`（macOS）的 `pull/push/sync`，减少手工遗漏。
 - **知识导入自动化**：将 docx→md 转化与索引维护作为固定动作，降低知识散落风险。
 - **把“质量”显性化**：至少固定看 3 个数：意图分类准确性（或需要改口次数）、平均追问轮数、无法处理/需记录的比例。
