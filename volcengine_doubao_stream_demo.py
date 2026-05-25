@@ -7,6 +7,10 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 ARK_CHAT_COMPLETIONS_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
 
@@ -106,49 +110,57 @@ def parse_tasks(text: str) -> list[Task]:
 
         inner_match = re.search(r"<task>\s*([\s\S]*?)\s*</task>", raw, flags=re.IGNORECASE)
         if not inner_match:
+            inner_match = re.search(r"<task>\s*([\s\S]*)", raw, flags=re.IGNORECASE)
+        if not inner_match:
             continue
 
         inner = inner_match.group(1).strip()
         try:
             data = json.loads(inner)
         except Exception:
-            task_name = None
-            if "knowledge_retrieval" in inner.lower() or "knowledge_retrieval.md" in inner.lower():
-                task_name = "knowledge_retrieval"
-            elif "知识检索" in inner:
-                task_name = "knowledge_retrieval"
-
-            query = None
-            mq = re.search(r"(?:输入)?查询词为[「“\"']([\s\S]*?)[」”\"']", inner)
-            if mq:
-                query = mq.group(1).strip()
-            if not query:
-                mq = re.search(r"\bquery\b\s*[:：]\s*([^\n\r]+)", inner, flags=re.IGNORECASE)
-                if mq:
-                    query = mq.group(1).strip().strip("\"'“”")
-
-            if task_name:
-                tasks.append(Task(task_type=task_name, raw=raw, query=query, top_k=None))
-            continue
-
-        if isinstance(data, dict):
-            data = [data]
-        if not isinstance(data, list):
-            continue
-
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            name = (item.get("type") or item.get("name") or item.get("task_type") or "").strip()
-            if not name:
-                continue
-            query = item.get("query") or None
-            top_k = item.get("top_k") or item.get("k") or None
             try:
-                top_k = int(top_k) if top_k is not None else None
+                decoder = json.JSONDecoder()
+                data, _ = decoder.raw_decode(inner)
             except Exception:
-                top_k = None
-            tasks.append(Task(task_type=name, raw=raw, query=query, top_k=top_k))
+                data = None
+
+        if data is not None and isinstance(data, (dict, list)):
+            if isinstance(data, dict):
+                data = [data]
+            if isinstance(data, list):
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    name = (item.get("type") or item.get("name") or item.get("task_type") or "").strip()
+                    if not name:
+                        continue
+                    query = item.get("query") or None
+                    top_k = item.get("top_k") or item.get("k") or None
+                    try:
+                        top_k = int(top_k) if top_k is not None else None
+                    except Exception:
+                        top_k = None
+                    tasks.append(Task(task_type=name, raw=raw, query=query, top_k=top_k))
+            continue
+
+        task_name = None
+        if "knowledge_retrieval" in inner.lower() or "knowledge_retrieval.md" in inner.lower():
+            task_name = "knowledge_retrieval"
+        elif u'\u77e5\u8bc6\u68c0\u7d22' in inner:
+            task_name = "knowledge_retrieval"
+
+        query = None
+        mq = re.search(r'(?:\u8f93\u5165)?\u67e5\u8be2\u8bcd\u4e3a[\u300c\u201c\u2018"\u2018]([\s\S]*?)[\u300d\u201d\u2019"\u2019]', inner)
+        if mq:
+            query = mq.group(1).strip()
+        if not query:
+            mq = re.search(r'\bquery\b\s*[:：]\s*([^\n\r]+)', inner, flags=re.IGNORECASE)
+            if mq:
+                query = mq.group(1).strip().strip('"\u201c\u201d\u2018\u2019')
+
+        if task_name:
+            tasks.append(Task(task_type=task_name, raw=raw, query=query, top_k=None))
+        continue
     return tasks
 
 
@@ -256,42 +268,9 @@ def extract_images(snippet: str, source_path: str) -> list[dict]:
     return images
 
 
-def knowledge_retrieval(repo_dir: str, query: str, top_k: int = 3) -> dict:
-    if not query.strip():
-        return {"hit_text": "", "images": []}
-
-    candidates = iter_index_md_paths(repo_dir)
-    if not candidates:
-        candidates = iter_md_files(repo_dir)
-
-    scored: list[tuple[int, str]] = []
-    for p in candidates:
-        try:
-            text = read_text_file(p)
-        except Exception:
-            continue
-        s = score_text(text, query) + score_text(os.path.basename(p), query)
-        if s > 0:
-            scored.append((s, p))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    picked = [p for _, p in scored[: max(1, top_k)]]
-
-    hit_sections: list[str] = []
-    images: list[dict] = []
-    for p in picked:
-        try:
-            text = read_text_file(p)
-        except Exception:
-            continue
-        snippet = extract_relevant_snippet(text, query)
-        if not snippet:
-            continue
-        hit_sections.append(f"[source] {p}\n{snippet}")
-        images.extend(extract_images(snippet, p))
-
-    hit_text = "\n\n---\n\n".join(hit_sections).strip()
-    return {"hit_text": hit_text, "images": images}
+def knowledge_retrieval(_repo_dir: str, query: str, top_k: int = 3) -> dict:
+    from skills.knowledge_retrieval.hybrid_search import retrieve
+    return retrieve(query, top_k=top_k)
 
 
 def format_knowledge_retrieval_result(result: dict) -> str:

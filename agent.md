@@ -47,7 +47,7 @@
 - [搭建具体业务系统指南](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/build_business_system.md)：引导用户通过“需求拆解 -> 数据建模 -> 配置指南”三步走战略，深度磨合需求并输出系统建设方案。
 
 ### 知识与维护类
-- [知识检索](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/knowledge_retrieval.md)：基础底层检索能力，支持返回命中文本与命中图片信息。
+- [知识检索](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/knowledge_retrieval/knowledge_retrieval.md)：基础底层检索能力，基于混合式检索（BM25 关键词 + 向量语义 + RRF 融合），支持返回命中文本与命中图片信息。
 - [信息补充与反问](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/clarifying_questions.md)：当用户信息不足时，通过反问获取必要信息。
 - [Context 转化与自动化索引](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/context_transformation.md)：处理上传文件、图片识别及索引维护。
 - [临时 Context 管理](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/temporary_context_management.md)：记录无法处理的问题或灵感。

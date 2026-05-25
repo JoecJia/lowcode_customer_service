@@ -25,6 +25,9 @@ __pycache__/
 .envrc
 .direnv/
 
+# FAISS vector index (auto-generated, large binary)
+context/.faiss/
+
 # Local sync scripts (optional to ignore)
 # sync_project.ps1
 documents_all/

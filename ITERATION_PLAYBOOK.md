@@ -94,7 +94,7 @@
 - 检查回答是否遵循目标 Skill 的固定输出结构
 - 若 `knowledge_retrieval` 命中片段包含图片引用，验证是否能把图片信息与文本一起输出
 
-知识检索规范：[knowledge_retrieval.md](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/knowledge_retrieval.md)
+知识检索规范：[knowledge_retrieval.md](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/skills/knowledge_retrieval/knowledge_retrieval.md)
 
 ### 5.3 提交前
 - 工作区干净：`git status` 无未提交文件（除预期修改外）
