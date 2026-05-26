@@ -17,6 +17,18 @@ ARK_CHAT_COMPLETIONS_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/comple
 MAX_AGENT_TURNS = 6
 MAX_TASK_CALLS = 10
 
+SKILL_REGISTRY = {
+    "knowledge_retrieval": "skills/knowledge_retrieval/knowledge_retrieval.md",
+    "clarifying_questions": "skills/clarifying_questions.md",
+    "product_feature_usage": "skills/product_feature_usage.md",
+    "usage_scenarios": "skills/usage_scenarios.md",
+    "scenario_solutions": "skills/scenario_solutions.md",
+    "build_business_system": "skills/build_business_system.md",
+    "git_sync": "skills/git_sync/git_sync.md",
+    "context_transformation": "skills/context_transformation/context_transformation.md",
+    "temporary_context_management": "skills/temporary_context_management.md",
+}
+
 DEBUG = os.environ.get("ARK_DEBUG", "").strip().lower() in {"1", "true", "yes"}
 
 
@@ -359,6 +371,99 @@ def call_chat_completions_stream(api_key: str, payload: dict, ssl_context: ssl.S
     return ("".join(assistant_content), "".join(assistant_reasoning))
 
 
+def dispatch_skill(repo_dir: str, task: Task) -> str:
+    skill_path = SKILL_REGISTRY.get(task.task_type)
+    if not skill_path:
+        return f"Unsupported task type: {task.task_type}"
+
+    if task.task_type == "knowledge_retrieval":
+        q = task.query or ""
+        k = task.top_k or 3
+        if DEBUG:
+            print(f"[debug] executing knowledge_retrieval query={q!r} top_k={k}", file=sys.stderr)
+        result = knowledge_retrieval(repo_dir, q, k)
+        return format_knowledge_retrieval_result(result)
+
+    full_path = os.path.join(repo_dir, skill_path)
+    try:
+        content = read_text_file(full_path)
+    except Exception:
+        return f"Failed to load skill file: {skill_path}"
+
+    return (
+        f"[Skill 已加载: {task.task_type}]\n"
+        f"以下是该 Skill 的完整指令，你必须严格遵循这些步骤完成任务。"
+        f"不可跳过任何必要环节，不可自行发挥：\n\n"
+        f"{content}"
+    )
+
+
+def _run_agent_turn(
+    api_key: str,
+    payload: dict,
+    ssl_context: ssl.SSLContext,
+    messages: list[dict],
+    repo_dir: str,
+    task_calls: int,
+    last_task_fingerprints: list[str],
+) -> tuple[int, bool]:
+    try:
+        assistant_content, assistant_reasoning = call_chat_completions_stream(api_key, payload, ssl_context)
+    except Exception as e:
+        print(f"Request failed: {e}", file=sys.stderr)
+        return task_calls, True
+
+    if assistant_content or assistant_reasoning:
+        assistant_msg = {"role": "assistant", "content": assistant_content}
+        if assistant_reasoning:
+            assistant_msg["reasoning_content"] = assistant_reasoning
+        messages.append(assistant_msg)
+
+    combined = (assistant_content or "") + "\n" + (assistant_reasoning or "")
+    tasks = parse_tasks(combined)
+    if DEBUG:
+        print(
+            f"\n[debug] assistant_content_len={len(assistant_content or '')} "
+            f"assistant_reasoning_len={len(assistant_reasoning or '')} tasks={len(tasks)}",
+            file=sys.stderr,
+        )
+    if not tasks:
+        return task_calls, False
+
+    for task in tasks:
+        task_calls += 1
+        if task_calls > MAX_TASK_CALLS:
+            print("\n[ABORT] Too many task calls, stop to avoid loop.\n", file=sys.stderr)
+            return task_calls, False
+
+        fingerprint = f"{task.task_type}|{task.query}|{task.top_k}"
+        last_task_fingerprints.append(fingerprint)
+        if len(last_task_fingerprints) >= 4 and len(set(last_task_fingerprints[-3:])) == 1:
+            print("\n[ABORT] Repeated same task 3 times, stop to avoid loop.\n", file=sys.stderr)
+            return task_calls, False
+
+        result_text = dispatch_skill(repo_dir, task)
+
+        sys.stdout.write("\n\n[task executed]\n")
+        sys.stdout.flush()
+
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "<task_result>\n"
+                    f"<type>{task.task_type}</type>\n"
+                    f"<result>\n{result_text}\n</result>\n"
+                    "</task_result>"
+                ),
+            }
+        )
+        if DEBUG:
+            print("[debug] task_result appended, will ask model to continue", file=sys.stderr)
+
+    return task_calls, True
+
+
 def main() -> int:
     api_key = os.environ.get("ARK_API_KEY")
     if not api_key:
@@ -369,97 +474,72 @@ def main() -> int:
     agent_md_path = os.path.join(repo_dir, "agent.md")
     system_prompt = read_text_file(agent_md_path)
     tool_protocol = (
-        "当且仅当你需要我在本地执行任务时，输出 <task>...</task>。"
-        "<task> 内必须是可被 json.loads 解析的 JSON（不要输出自然语言，不要加额外文本）。"
-        "JSON 结构为数组：[{\"name\":\"knowledge_retrieval\",\"query\":\"...\",\"top_k\":3}]。"
-        "我会把执行结果作为下一条 user 消息返回，格式为 <task_result>...</task_result>。"
-        "收到 <task_result> 后，请继续完成对用户问题的最终回答。"
-        "如果信息足够，请不要再次输出 <task>。"
+        "你需要通过 <task>...</task> 标签调用 Skill 来完成任务。"
+        "<task> 内必须是 JSON 数组：[{\"name\":\"<skill_name>\",\"query\":\"...\",\"top_k\":3}]。"
+        "\n可用 Skill：\n"
+        "  - knowledge_retrieval: 检索知识库（必须提供 query）\n"
+        "  - clarifying_questions: 反问用户补充信息\n"
+        "  - product_feature_usage: 产品功能使用方法\n"
+        "  - usage_scenarios: 产品功能使用案例\n"
+        "  - scenario_solutions: 场景方案建议\n"
+        "  - build_business_system: 搭建业务系统指南\n"
+        "  - git_sync: 项目同步\n"
+        "  - context_transformation: Context 转化与索引维护\n"
+        "  - temporary_context_management: 临时内容记录\n"
+        "\n收到 <task> 后，我会加载对应 Skill 文件的完整内容并注入上下文。"
+        "你收到 <task_result> 后，必须严格按 Skill 文件中定义的执行步骤完成任务。"
+        "如果你已经有足够信息可以直接回答用户，则无需输出 <task>。"
+        "可以一次输出多个 <task>（数组中有多个元素），我会依次执行。"
         "请不要把 <task> 放进代码块里。"
     )
 
-    messages = [
+    messages: list[dict] = [
         {"role": "system", "content": system_prompt},
         {"role": "system", "content": tool_protocol},
-        {"role": "user", "content": "数据联动是什么？"},
     ]
 
     ssl_context = build_ssl_context()
-    task_calls = 0
-    last_task_fingerprints: list[str] = []
 
-    for _ in range(MAX_AGENT_TURNS):
-        payload = {
-            "model": "doubao-seed-2-0-code-preview-260215",
-            "messages": messages,
-            "stream": True,
-            "thinking": {"type": "enabled"},
-        }
+    print("智能客服已就绪。输入您的问题，输入 /exit 退出。")
+    print("-" * 50)
 
+    while True:
         try:
-            assistant_content, assistant_reasoning = call_chat_completions_stream(api_key, payload, ssl_context)
-        except Exception as e:
-            print(f"Request failed: {e}", file=sys.stderr)
-            return 1
-
-        if assistant_content or assistant_reasoning:
-            assistant_msg = {"role": "assistant", "content": assistant_content}
-            if assistant_reasoning:
-                assistant_msg["reasoning_content"] = assistant_reasoning
-            messages.append(assistant_msg)
-
-        combined = (assistant_content or "") + "\n" + (assistant_reasoning or "")
-        tasks = parse_tasks(combined)
-        if DEBUG:
-            print(
-                f"\n[debug] assistant_content_len={len(assistant_content or '')} "
-                f"assistant_reasoning_len={len(assistant_reasoning or '')} tasks={len(tasks)}",
-                file=sys.stderr,
-            )
-        if not tasks:
+            user_input = input("\n> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n再见！")
             return 0
 
-        for task in tasks:
-            task_calls += 1
-            if task_calls > MAX_TASK_CALLS:
-                print("\n[ABORT] Too many task calls, stop to avoid loop.\n", file=sys.stderr)
-                return 3
+        if user_input.lower() in ("/exit", "/quit"):
+            print("再见！")
+            return 0
+        if not user_input:
+            continue
 
-            fingerprint = f"{task.task_type}|{task.query}|{task.top_k}"
-            last_task_fingerprints.append(fingerprint)
-            if len(last_task_fingerprints) >= 4 and len(set(last_task_fingerprints[-3:])) == 1:
-                print("\n[ABORT] Repeated same task 3 times, stop to avoid loop.\n", file=sys.stderr)
-                return 3
+        messages.append({"role": "user", "content": user_input})
 
-            if task.task_type != "knowledge_retrieval":
-                result_text = f"Unsupported task type: {task.task_type}"
-            else:
-                q = task.query or ""
-                k = task.top_k or 3
-                if DEBUG:
-                    print(f"[debug] executing knowledge_retrieval query={q!r} top_k={k}", file=sys.stderr)
-                result = knowledge_retrieval(repo_dir, q, k)
-                result_text = format_knowledge_retrieval_result(result)
+        task_calls = 0
+        last_task_fingerprints: list[str] = []
 
-            sys.stdout.write("\n\n[task executed]\n")
-            sys.stdout.flush()
+        for turn in range(MAX_AGENT_TURNS):
+            payload = {
+                "model": "doubao-seed-2-0-code-preview-260215",
+                "messages": messages,
+                "stream": True,
+                "thinking": {"type": "enabled"},
+            }
 
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        "<task_result>\n"
-                        f"<type>{task.task_type}</type>\n"
-                        f"<result>\n{result_text}\n</result>\n"
-                        "</task_result>"
-                    ),
-                }
+            task_calls, should_continue = _run_agent_turn(
+                api_key, payload, ssl_context, messages, repo_dir, task_calls, last_task_fingerprints
             )
-            if DEBUG:
-                print("[debug] task_result appended, will ask model to continue", file=sys.stderr)
+            if not should_continue:
+                break
 
-    print("\n[ABORT] Reached max agent turns.\n", file=sys.stderr)
-    return 3
+        if turn >= MAX_AGENT_TURNS - 1 and task_calls > 0:
+            print(
+                "\n[WARN] 当前问题已达到最大推理轮次，可能未完全回答。您可以继续追问。",
+                file=sys.stderr,
+            )
 
 
 if __name__ == "__main__":
