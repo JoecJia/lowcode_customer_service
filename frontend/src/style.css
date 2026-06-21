@@ -1,0 +1,58 @@
+:root {
+  --color-primary: #2B67FF;
+  --color-primary-hover: #3D82F2;
+  --color-primary-active: #0057FF;
+  --color-primary-light: #EBF2FF;
+  --color-success: #4DD655;
+  --color-warning: #FBA233;
+  --color-danger: #F53F3F;
+  --color-text-primary: #212633;
+  --color-text-secondary: #465164;
+  --color-text-tertiary: #717989;
+  --color-text-disabled: #BABECF;
+  --color-border: #DEE0E3;
+  --color-border-light: #EAECF1;
+  --color-bg-page: #F0F2F7;
+  --color-bg-card: #FFFFFF;
+  --color-bg-hover: #F5F6FA;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-round: 999px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+}
+
+#app {
+  height: 100%;
+}
+
+.el-button--primary {
+  --el-button-hover-bg-color: var(--color-primary-hover);
+  --el-button-active-bg-color: var(--color-primary-active);
+}

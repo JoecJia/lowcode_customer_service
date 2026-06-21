@@ -26,8 +26,18 @@ __pycache__/
 .direnv/
 
 # FAISS vector index (auto-generated, large binary)
-context/.faiss/
+backend/context/.faiss/
+
+# SQLite database (auto-generated)
+backend/data/
 
 # Local sync scripts (optional to ignore)
 # sync_project.ps1
 documents_all/
+
+# Large docx conversion cache
+docs/convert_docs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

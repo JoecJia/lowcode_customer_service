@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台登录 - 智能客服平台</title>
+<style>
+  :root {
+    --color-primary: #2B67FF;
+    --color-primary-hover: #3D82F2;
+    --color-primary-active: #0057FF;
+    --color-primary-light: #EBF2FF;
+    --color-success: #4DD655;
+    --color-warning: #FBA233;
+    --color-danger: #F53F3F;
+    --color-text-primary: #212633;
+    --color-text-secondary: #465164;
+    --color-text-tertiary: #717989;
+    --color-text-disabled: #BABECF;
+    --color-border: #DEE0E3;
+    --color-border-light: #EAECF1;
+    --color-bg-page: #F0F2F7;
+    --color-bg-card: #FFFFFF;
+    --color-bg-hover: #F5F6FA;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #2B67FF 0%, #5B8CFF 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 装饰圆 */
+  .decor-circle { position: fixed; border-radius: 50%; opacity: 0.06; pointer-events: none; }
+  .decor-circle-1 { width: 600px; height: 600px; background: #fff; top: -200px; right: -150px; }
+  .decor-circle-2 { width: 400px; height: 400px; background: #fff; bottom: -100px; left: -100px; }
+
+  /* 登录卡片 */
+  .login-card {
+    position: relative; z-index: 1;
+    width: 400px;
+    background: var(--color-bg-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 40px;
+  }
+
+  /* ① 标题区域 */
+  .brand { text-align: center; margin-bottom: 32px; }
+  .brand-logo {
+    width: 48px; height: 48px; background: linear-gradient(135deg, #2B67FF, #3D82F2);
+    border-radius: var(--radius-lg); margin: 0 auto 16px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-logo svg { width: 28px; height: 28px; }
+  .brand-title {
+    font-size: 20px; font-weight: 600; color: var(--color-text-primary);
+    line-height: 28px;
+  }
+  .brand-subtitle {
+    font-size: 14px; color: var(--color-text-tertiary); margin-top: 4px;
+  }
+
+  /* 错误提示 */
+  .error-msg {
+    display: none; align-items: center; gap: 8px;
+    background: #FFF0F0; border-radius: var(--radius-sm);
+    padding: 10px 12px; margin-bottom: 20px;
+    font-size: 13px; color: var(--color-danger); line-height: 20px;
+  }
+  .error-msg.show { display: flex; }
+  .error-msg svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* 表单组 */
+  .form-group { margin-bottom: 20px; }
+  .form-label {
+    display: block; font-size: 14px; font-weight: 500;
+    color: var(--color-text-primary); margin-bottom: 8px; line-height: 22px;
+  }
+
+  /* ② ③ 输入框 */
+  .input-wrapper { position: relative; }
+  .input-field {
+    width: 100%; height: 40px; padding: 0 12px;
+    font-size: 14px; color: var(--color-text-primary);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    font-family: inherit;
+  }
+  .input-field::placeholder { color: var(--color-text-disabled); }
+  .input-field:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(43,103,255,0.15);
+  }
+  .input-field.error {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 2px rgba(245,63,63,0.15);
+  }
+
+  /* 密码可见切换 */
+  .pwd-toggle {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--color-text-tertiary); display: flex; align-items: center;
+    transition: color 0.2s ease;
+  }
+  .pwd-toggle:hover { color: var(--color-text-secondary); }
+  .pwd-toggle svg { width: 18px; height: 18px; }
+
+  /* 字段错误 */
+  .field-error {
+    display: none; font-size: 12px; color: var(--color-danger);
+    margin-top: 6px; line-height: 18px;
+  }
+  .field-error.show { display: block; }
+
+  /* ④ 登录按钮 */
+  .btn-login {
+    width: 100%; height: 40px;
+    background: linear-gradient(135deg, #2B67FF 0%, #3D82F2 100%);
+    border: none; border-radius: var(--radius-sm);
+    font-size: 16px; font-weight: 500; color: #fff;
+    cursor: pointer; margin-top: 4px;
+    transition: all 0.2s ease;
+    font-family: inherit; letter-spacing: 0.5px;
+  }
+  .btn-login:hover { background: linear-gradient(135deg, #3D82F2 0%, #5B8CFF 100%); }
+  .btn-login:active { background: var(--color-primary-active); transform: scale(0.98); }
+
+  /* ⑤ 注册入口（管理员说明） */
+  .register-link {
+    text-align: center; margin-top: 20px; font-size: 14px; color: var(--color-text-tertiary);
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--color-bg-card); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md); padding: 12px 24px;
+    font-size: 14px; color: var(--color-text-primary);
+    display: none; z-index: 999; align-items: center; gap: 8px;
+  }
+  .toast.show { display: flex; animation: toastIn 0.3s ease-out; }
+  .toast.success { color: #2B7A3A; }
+  .toast.error { color: var(--color-danger); }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="decor-circle decor-circle-1"></div>
+<div class="decor-circle decor-circle-2"></div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<!-- 登录卡片 -->
+<div class="login-card">
+  <!-- ① 标题 -->
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="24" height="24" rx="6" fill="white" fill-opacity="0.2"/>
+        <path d="M8 14c0-1.5 0.5-3 1.5-4l4.5 4-4.5 4A6.5 6.5 0 0 1 8 14z" fill="white"/>
+        <path d="M20 14c0 1.5-0.5 3-1.5 4l-4.5-4 4.5-4A6.5 6.5 0 0 1 20 14z" fill="white" fill-opacity="0.6"/>
+        <circle cx="14" cy="14" r="3" fill="white"/>
+      </svg>
+    </div>
+    <h1 class="brand-title">低代码平台智能客服管理后台</h1>
+    <p class="brand-subtitle">管理员登录</p>
+  </div>
+
+  <!-- 错误提示 -->
+  <div class="error-msg" id="errorMsg">
+    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm0 10a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zM7.25 5v4a.75.75 0 0 0 1.5 0V5a.75.75 0 0 0-1.5 0z"/></svg>
+    <span id="errorText">用户名或密码错误</span>
+  </div>
+
+  <!-- ② 用户名 -->
+  <div class="form-group">
+    <label class="form-label">用户名</label>
+    <div class="input-wrapper">
+      <input type="text" class="input-field" id="username" placeholder="请输入用户名" autocomplete="username">
+    </div>
+    <div class="field-error" id="usernameError">请输入用户名</div>
+  </div>
+
+  <!-- ③ 密码 -->
+  <div class="form-group">
+    <label class="form-label">密码</label>
+    <div class="input-wrapper">
+      <input type="password" class="input-field" id="password" placeholder="请输入密码" autocomplete="current-password">
+      <button class="pwd-toggle" id="pwdToggle" type="button">
+        <svg id="eyeOff" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M2 9s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="9" cy="9" r="2"/>
+          <line x1="2" y1="2" x2="16" y2="16"/>
+        </svg>
+        <svg id="eyeOn" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none">
+          <path d="M2 9s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="9" cy="9" r="2"/>
+        </svg>
+      </button>
+    </div>
+    <div class="field-error" id="passwordError">请输入密码</div>
+  </div>
+
+  <!-- ④ 登录按钮 -->
+  <button class="btn-login" id="btnLogin">登 录</button>
+
+  <!-- ⑤ 管理员说明（替代注册入口） -->
+  <div class="register-link">
+    管理后台不支持自主注册，请联系超级管理员
+  </div>
+</div>
+
+<script>
+  const usernameEl = document.getElementById('username');
+  const passwordEl = document.getElementById('password');
+  const btnLogin = document.getElementById('btnLogin');
+  const errorMsg = document.getElementById('errorMsg');
+  const errorText = document.getElementById('errorText');
+  const usernameError = document.getElementById('usernameError');
+  const passwordError = document.getElementById('passwordError');
+  const pwdToggle = document.getElementById('pwdToggle');
+  const eyeOff = document.getElementById('eyeOff');
+  const eyeOn = document.getElementById('eyeOn');
+  const toast = document.getElementById('toast');
+  const toastMsg = document.getElementById('toastMsg');
+
+  function showToast(msg, type) {
+    toastMsg.textContent = msg;
+    toast.className = 'toast show ' + type;
+    setTimeout(function() { toast.classList.remove('show'); }, 2500);
+  }
+
+  function clearErrors() {
+    errorMsg.classList.remove('show');
+    usernameEl.classList.remove('error');
+    passwordEl.classList.remove('error');
+    usernameError.classList.remove('show');
+    passwordError.classList.remove('show');
+  }
+
+  function showFieldError(el, errEl, msg) {
+    el.classList.add('error');
+    errEl.textContent = msg;
+    errEl.classList.add('show');
+  }
+
+  pwdToggle.addEventListener('click', function() {
+    if (passwordEl.type === 'password') {
+      passwordEl.type = 'text';
+      eyeOff.style.display = 'none';
+      eyeOn.style.display = 'block';
+    } else {
+      passwordEl.type = 'password';
+      eyeOff.style.display = 'block';
+      eyeOn.style.display = 'none';
+    }
+  });
+
+  usernameEl.addEventListener('input', function() {
+    usernameEl.classList.remove('error');
+    usernameError.classList.remove('show');
+    errorMsg.classList.remove('show');
+  });
+
+  passwordEl.addEventListener('input', function() {
+    passwordEl.classList.remove('error');
+    passwordError.classList.remove('show');
+    errorMsg.classList.remove('show');
+  });
+
+  btnLogin.addEventListener('click', function() {
+    clearErrors();
+    var u = usernameEl.value.trim();
+    var p = passwordEl.value.trim();
+    var valid = true;
+
+    if (!u) {
+      showFieldError(usernameEl, usernameError, '请输入用户名');
+      valid = false;
+    }
+    if (!p) {
+      showFieldError(passwordEl, passwordError, '请输入密码');
+      valid = false;
+    }
+    if (!valid) return;
+
+    btnLogin.textContent = '登录中...';
+    btnLogin.style.opacity = '0.7';
+    btnLogin.style.pointerEvents = 'none';
+
+    // 模拟 API 调用
+    setTimeout(function() {
+      btnLogin.textContent = '登 录';
+      btnLogin.style.opacity = '1';
+      btnLogin.style.pointerEvents = 'auto';
+
+      // 模拟演示：管理员用户名 admin 密码 123456 登录成功
+      if (u === 'admin' && p === '123456') {
+        showToast('登录成功，正在跳转...', 'success');
+      } else {
+        errorText.textContent = '用户名或密码错误';
+        errorMsg.classList.add('show');
+        showToast('登录失败，请检查用户名和密码', 'error');
+      }
+    }, 800);
+  });
+
+  // 回车登录
+  passwordEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') btnLogin.click();
+  });
+  usernameEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') passwordEl.focus();
+  });
+</script>
+
+</body>
+</html>
