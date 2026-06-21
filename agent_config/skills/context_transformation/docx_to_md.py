@@ -7,6 +7,9 @@ import shutil
 import base64
 import quopri
 
+from bs4 import BeautifulSoup
+import html2text
+
 def handle_alt_chunk(docx, doc_path, abs_assets_dir, assets_dir_rel_to_md):
     """
     处理 DOCX 中的 altChunk (通常是 MHT 格式)。
@@ -35,53 +38,73 @@ def handle_alt_chunk(docx, doc_path, abs_assets_dir, assets_dir_rel_to_md):
     # 简单的 MHT 解析逻辑：提取 HTML 部分和图片部分
     parts = re.split(r'------=_NextPart_[a-f0-9]+', mht_content)
     html_content = ""
-    images = {}
+    cid_to_file = {}  # Content-ID -> local image path
 
     for part in parts:
         if 'Content-Type: text/html' in part:
-            # 提取 HTML 源码
-            html_body = part.split('\r\n\r\n', 1)[1] if '\r\n\r\n' in part else part
-            # 使用 bytes.fromhex 或者更安全的方式处理，但 MHT 里的 quoted-printable 经常有特殊字符
-            # 先尝试简单处理
+            split_pos = part.find('\r\n\r\n')
+            if split_pos < 0:
+                split_pos = part.find('\n\n')
+            if split_pos > 0:
+                body = part[split_pos+4:] if part[split_pos:split_pos+4] == '\r\n\r\n' else part[split_pos+2:]
+            else:
+                body = part
+            body = body.rstrip('\r\n-')
             try:
-                html_content = quopri.decodestring(html_body.encode('ascii', errors='ignore')).decode('utf-8', errors='ignore')
+                html_content = quopri.decodestring(body.encode('ascii', errors='ignore')).decode('utf-8', errors='ignore')
             except Exception:
-                html_content = html_body # 退而求其次
+                html_content = body
         elif 'Content-Type: image/' in part:
-            # 提取图片
-            if '\r\n\r\n' in part:
-                headers, body = part.split('\r\n\r\n', 1)
-                location_match = re.search(r'Content-Location: (.*)', headers)
-                if location_match:
-                    img_id = location_match.group(1).strip()
-                    try:
-                        img_data = base64.b64decode(body.strip())
-                        img_filename = os.path.basename(img_id)
-                        if not img_filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                            img_filename += ".png"
-                        
-                        with open(os.path.join(abs_assets_dir, img_filename), 'wb') as f:
-                            f.write(img_data)
-                        images[img_id] = os.path.join(assets_dir_rel_to_md, img_filename)
-                    except Exception as e:
-                        print(f"Warning: Failed to decode image {img_id}: {e}")
+            split_pos = part.find('\r\n\r\n')
+            if split_pos < 0:
+                split_pos = part.find('\n\n')
+            if split_pos > 0:
+                headers = part[:split_pos]
+                body = part[split_pos+4:] if part[split_pos:split_pos+4] == '\r\n\r\n' else part[split_pos+2:]
+            else:
+                continue
+            cid_m = re.search(r'Content-ID:\s*<(.+?)>', headers)
+            loc_m = re.search(r'Content-Location:\s*(\S+)', headers)
+            if cid_m and loc_m:
+                fname = loc_m.group(1).strip()
+                cid = cid_m.group(1).strip()
+                try:
+                    img_data = base64.b64decode(body.strip())
+                    path = os.path.join(abs_assets_dir, fname)
+                    with open(path, 'wb') as f:
+                        f.write(img_data)
+                    cid_to_file[cid] = os.path.join(assets_dir_rel_to_md, fname)
+                except Exception as e:
+                    print(f"Warning: Failed to decode image {fname}: {e}")
 
-    # 3. 将 HTML 转为 Markdown (非常基础的转换)
-    # 提取标题
-    html_content = re.sub(r'<h([1-6])[^>]*>(.*?)</h\1>', lambda m: f"\n{'#' * int(m.group(1))} {re.sub('<[^>]+>', '', m.group(2))}\n", html_content, flags=re.I|re.S)
-    # 提取段落
-    html_content = re.sub(r'<p[^>]*>(.*?)</p>', lambda m: f"\n{re.sub('<[^>]+>', '', m.group(1))}\n", html_content, flags=re.I|re.S)
-    # 提取图片
-    def replace_img(match):
-        src = re.search(r'src=["\'](.*?)["\']', match.group(0))
-        if src and src.group(1) in images:
-            return f"\n\n![图片说明]({images[src.group(1)]})\n\n"
-        return ""
-    html_content = re.sub(r'<img[^>]+>', replace_img, html_content, flags=re.I)
-    
-    # 清理剩余标签
-    markdown = re.sub(r'<[^>]+>', '', html_content)
-    markdown = re.sub(r'\n\s*\n', '\n\n', markdown)
+    # 替换 HTML 中的 cid: 引用为本地路径
+    def replace_cid_img(m):
+        full = m.group(0)
+        cid_list = re.findall(r'cid:([^\s\"\'<>]+)', full)
+        for cid in cid_list:
+            if cid in cid_to_file:
+                full = full.replace(f'cid:{cid}', cid_to_file[cid])
+        return full
+
+    html_content = re.sub(r'<img[^>]+>', replace_cid_img, html_content)
+
+    # 提取 body
+    soup = BeautifulSoup(html_content, 'html.parser')
+    body_tag = soup.find('body')
+    if body_tag:
+        html_content = str(body_tag)
+
+    # 使用 html2text 转为 Markdown
+    h = html2text.HTML2Text()
+    h.body_width = 0
+    h.ignore_links = False
+    h.ignore_images = False
+    h.ignore_tables = False
+    h.unicode_snob = True
+    markdown = h.handle(html_content)
+
+    markdown = re.sub(r'^Content-Type: [^\n]+\n+', '', markdown)
+    markdown = re.sub(r'\n{3,}', '\n\n', markdown)
     
     return markdown.strip()
 

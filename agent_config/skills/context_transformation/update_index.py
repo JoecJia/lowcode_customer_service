@@ -2,9 +2,9 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from skills.context_transformation.vectorizer import (
+from agent_config.skills.context_transformation.vectorizer import (
     REPO_DIR,
     EmbeddingModel,
     build_index_from_docs,
@@ -29,7 +29,7 @@ def cmd_update(file_path: str) -> int:
     elapsed = time.time() - t0
 
     if ok:
-        from skills.knowledge_retrieval.hybrid_search import refresh_searcher
+        from agent_config.skills.knowledge_retrieval.hybrid_search import refresh_searcher
         refresh_searcher()
         meta = load_chunk_meta()
         file_index = meta.get("file_index", {})

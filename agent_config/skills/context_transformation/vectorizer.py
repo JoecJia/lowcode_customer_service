@@ -7,8 +7,8 @@ from typing import Optional
 import numpy as np
 
 
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FAISS_DIR = os.path.join(REPO_DIR, "context", ".faiss")
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+FAISS_DIR = os.path.join(REPO_DIR, "agent_config", "context", ".faiss")
 INDEX_PATH = os.path.join(FAISS_DIR, "index.faiss")
 META_PATH = os.path.join(FAISS_DIR, "chunk_meta.json")
 
@@ -33,8 +33,8 @@ def read_text_file(path: str) -> str:
 
 def iter_md_files(base_dir: str) -> list[str]:
     roots = [
-        os.path.join(base_dir, "context"),
-        os.path.join(base_dir, "skills"),
+        os.path.join(base_dir, "agent_config", "context"),
+        os.path.join(base_dir, "agent_config", "skills"),
     ]
     md_files: list[str] = []
     for root in roots:

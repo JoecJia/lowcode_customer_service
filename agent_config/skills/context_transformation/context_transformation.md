@@ -4,7 +4,7 @@
 该技能用于将用户上传的原始文件（如 .docx 文档、图片等）转化为结构化、层级分明的 Markdown Context，并自动维护 `context/index.md` 索引。它具备文档解析、图片提取、层级映射以及索引自动化维护的能力。
 
 ## 目录结构
-- `docx_to_md.py`: 核心转换脚本，支持将 .docx 转为 .md 并提取图片。
+- `docx_to_md.py`: 核心转换脚本，支持将 .docx 转为 .md 并提取图片。也支持 HTML 格式的 .doc 文件（当文件以 `<html` 开头时，走 HTML 解析路径）。
 - `vectorizer.py`: 向量化引擎，提供 MD 文档分块、Embedding 向量化、FAISS 索引管理与增量更新。
 - `build_initial_index.py`: 一键构建全量向量索引的入口脚本。
 - `update_index.py`: 向量索引维护 CLI 统一入口（status / update / rebuild）。
@@ -33,7 +33,7 @@
 ## 使用方法 (CLI)
 可以使用 Python 脚本手动运行转换：
 ```bash
-python3 skills/context_transformation/docx_to_md.py "input_file.docx" "output_file.md" --assets "../assets/folder_name"
+python3 agent_config/skills/context_transformation/docx_to_md.py "input_file.docx" "output_file.md" --assets "../assets/folder_name"
 ```
 
 ## 自定义处理规则 (自我进化区)
@@ -74,24 +74,24 @@ python3 skills/context_transformation/docx_to_md.py "input_file.docx" "output_fi
 
 ```bash
 # 查看索引状态
-python3 skills/context_transformation/update_index.py status
+python3 agent_config/skills/context_transformation/update_index.py status
 
 # 增量更新单个文件（Agent 编辑文档后调用）
-python3 skills/context_transformation/update_index.py update context/faq/general_faq.md
+python3 agent_config/skills/context_transformation/update_index.py update context/faq/general_faq.md
 
 # 全量重建索引（知识库大规模变更后）
-python3 skills/context_transformation/update_index.py rebuild
+python3 agent_config/skills/context_transformation/update_index.py rebuild
 ```
 
 #### 初始全量索引构建
 ```bash
-python3 skills/context_transformation/build_initial_index.py
+python3 agent_config/skills/context_transformation/build_initial_index.py
 ```
 首次部署或知识库大规模变更后运行，扫描 `context/` 和 `skills/` 下所有 `.md` 文件并构建索引。
 
 #### 代码级调用
 ```python
-from skills.context_transformation.vectorizer import update_document
+from agent_config.skills.context_transformation.vectorizer import update_document
 update_document("context/faq/general_faq.md")
 ```
 该函数会自动：
@@ -106,6 +106,6 @@ update_document("context/faq/general_faq.md")
 ```
 管理员: "帮我把 FAQ 里数据导出的答案更新一下"
    → Agent 检索并编辑 context/faq/general_faq.md
-   → Agent 执行: python3 skills/context_transformation/update_index.py update context/faq/general_faq.md
+   → Agent 执行: python3 agent_config/skills/context_transformation/update_index.py update context/faq/general_faq.md
    → 向量索引增量更新完成，后续检索可命中新内容
 ```

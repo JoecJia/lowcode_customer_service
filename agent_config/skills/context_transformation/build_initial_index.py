@@ -2,9 +2,9 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from skills.context_transformation.vectorizer import (
+from agent_config.skills.context_transformation.vectorizer import (
     REPO_DIR,
     EmbeddingModel,
     build_index_from_docs,
