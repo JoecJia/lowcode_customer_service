@@ -1,0 +1,2761 @@
+[
+  {//单行输入
+    "linkInfo": {//数据联动配置
+      "linked": false, //是否配置过数据联动
+      "linkFormId": 0,  //联动表单id
+      "linkFormType": "", //联动类型
+      "linkFormIdEnc": "", //联动表单id验证enc
+      "linkFormValueFieldId": 0, //联动字段id
+      "linkFormValueFieldCompt": "", //联动字段类型名
+      "condFields": [] //联动动态条件
+    },
+    "isShow": true,//显隐规则控制是否显示
+    "hasAuthority": true,//右侧配置、角色配置功能、流程配置等控制是否有权限修改值
+    "fromDetail": true,//组件是否是子表单内的子组件
+    "inDetailGroupIndex": true,//组件在子表单内所在行下标索引 从0开始
+    "compt": "editinput",//组件类型名称
+    "alias": "1",//组件别名
+    "formula": {////单行输入使用 常用公式设置内容
+      "status": false, //是否配置公式
+      "selIndex": -1,  //选择公式类型项目下标
+      "calculateFieldId": "0"//关联"计算"字段id
+    },
+    "latestValShow": false,//是否开启读取上一次提交的值
+    "pid": 0,//父级组件id
+    "style": { // 使用说明：此属性不为空则以此字段中配置为准（layoutRatio弃用），为空则layoutRatio依旧有效
+      "layout": [ //字段列占比,如：[1,2]，即占整行1/2
+        1,
+        1
+      ],
+      "title": { // 标题样式
+        "position": "top",
+        "align": "left"
+      },
+      "field": ""  //子表单字段样式，json串
+    },
+    "id": 1, //组件id
+    "fields": [//组件中的字段信息
+      {
+        "fieldType": { //字段值类型
+          "type": "string"
+        },
+        "label": "单行输入",//组件信息名
+        "tip": {//组件标题描述
+          "imgs": [], //组件标题描述文件类描述 附件描述
+          "text": "" //组件标题文字描述
+        },
+        "verify": { //字段校验
+          "charLimit": { // 是否开启字符长度限制
+            "open": false
+          },
+          "regularExpress": { // 单行输入使用自定义正则表达式
+            "errorTip": "格式错误!", //自定义正则匹配失败提示信息
+            "express": "" //自定义正则表达式
+          },
+          "unique": { // 是否开启唯一性检查
+            "errMsg": "此项内容已存在，不允许重复提交",
+            "open": false
+          },
+          "required": {},//字段值必填
+          "format": {
+            "code": {
+              "open": false // 是否开启特殊值格式
+            },
+            "type": "" // 格式类型 邮箱 身份证号等
+          }
+        },
+        "associativeInput": {//联想输入
+          "associativeType": "", // 设置的获取联想项方式  '':未设置, bindForm:关联表单字段联想, customOption:自定义联想, api.第三方获取联想
+          "customOption": { // 自定义联想项配置
+            "options": []
+          },
+          "api": {  // 第三方获取联想项配置
+            "response": [ // 返回值  [{"jpath":"$.result[0].leader"}]
+              {
+                "jpath": ""
+              }
+            ],
+            "url": [], // 请求url: [{"label":"http://wisdomclass.chaoxing.com/cxoa/sel?username=","type":"text"},{"ftype":"uname","label":"填写人","type":"field","cid":"-1"}]
+            "urlHeaders": [] // 请求头 [{"name": "aa","value": "bb"}]
+          },
+          "bindFormField": { // 关联其他表单字段获取联想项配置
+            "bindFormIdEnc": "", //绑定其它表单id验证串
+            "bindFieldId": 0, //绑定其它表单字段id
+            "bindFieldIdx": 0, //绑定其它表单字段索引下标值
+            "bindFormType": "customForm", //绑定类型
+            "bindFormId": 0, //绑定其它表单id
+            "bindFieldCompt": "" //绑定其它表单字段compt
+          }
+        },
+        "visible": true,//右侧配置字段是否可见
+        "desensitive": false,//是否脱敏
+        "desensitiveConfig": {// 脱敏规则
+          "frontNum": 0,  // 自定义规则：前明文数量
+          "lastNum": 0, // 自定义规则：后明文数量
+          "ruleType": 0 // 0:默认脱敏，1：自定义规则脱敏
+        },
+        "editable": true, //字段是否可编辑
+        "sweepCode": false, //是否开启扫码录入功能(选人、单行输入)
+        "codeChangeable": false, //单行输入设置扫码录入，是否可编辑
+        "values": [
+          {
+            "val": "" //字段值       
+          }
+        ],
+        "hasDefaultValue": false, //是否设置过默认值
+        "defaultValueStr": "[{\"val\":\"\"}]",//默认值串
+        "inputTip": {  // 单行输入/数字输入 空值提示、前后缀图标
+          "prefix": { // 前缀
+            "color": "#C0C0C3", // 颜色
+            "icon": "" // 图标
+          },
+          "placeholder": "",  // 空值提示
+          "suffix": { // 后缀
+            "color": "#C0C0C3",
+            "icon": ""
+          }
+        },
+        "cropping": false // 是否开启图片裁切
+      }
+    ],
+    "formulaEdit": { // 公式编辑设置内容
+      "formula": "" // 公式
+    }
+  },
+  {//联系人
+    "id": 19,
+    "compt": "contact",
+    "alias": "19",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "linkInfo": {
+      "linkFormType": "customForm",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "loginUserForValue": false,
+    "relationValueConfig": { //联系人/所属人组件使用 默认值配置
+      "condFieldId": 0, //关联的字段id
+      "type": 0, //关联类型 0/1 学号/手机号
+      "open": false //是否开启默认值从表单内字段关联获取
+    },
+    "latestValShow": false,
+    "optionalScope": { //联系人字段用到，用于存储选择范围
+      "options": "", //[{id: 1, name: 'tt'}]
+      "type": 0,
+      "roleDesignRange": 1,//角色选择范围 1：角色下全部人员，2：对发起人有管理权限的角色下人员(审批加签范围使用，老数据默认为1)
+      "includeSubDept": 1 // 包含子级部门：0-否，1-是（需要兼容老数据，无此属性）
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "name": "点击选择人员",
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "联系人",
+        "sweepCode": false,
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "multiple": false,
+          "type": "contact"
+        }
+      }
+    ]
+  },
+  {//选择数据
+    "compt": "relateddata",
+    "alias": "33",
+    "pid": 0,
+    "id": 33,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "visible": true,
+        "lockData": true, // 锁定已选数据
+        "editable": true,
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "选择数据",
+        "fieldType": {
+          "type": "relateddata"
+        },
+        "name": "选择数据"
+      }
+    ],
+    "relateForm": {
+      "formId": 0, //绑定的表单或审批id
+      "formType": "customForm", //绑定的表单或审批类型
+      "dynamicFieldDefaultOrders": [ //数据选择弹窗的默认排序规则
+        {
+          "rename": "",
+          "editable": false,
+          "name": "提交时间",
+          "width": 100,
+          "checked": false,
+          "id": -3,
+          "sort": {
+            "select": true,
+            "type": 1,
+            "status": false
+          },
+          "status": true
+        }
+      ],
+      "aprvAppId": 0,  //绑定的审批模板id
+      "searchFields": [], //数据选择弹窗的顶部筛选设置
+      "relateFields": [ //已关联的组件关联集[{condFieldId:x, currFieldId:x}]
+        {
+          "condFieldId": 1,
+          "currFieldId": 1,
+          "innerIndex": 0
+        }
+      ],
+      "enc": "bf6b6f0eb2cdae064bbda0cbbddbfeda",//验证表单id enc
+      "relateType": 2, //组件关联类型 填充到新组件/已有组件 1/2
+      "conditions": [], //筛选条件集
+      "fieldList": [ //要在填写页数据弹窗显示的组件列表[{id:x, compt:x, pid:x, label:x}],
+        {
+          "id": 1,
+          "pid": 0,
+          "compt": "editinput",
+          "label": "单行输入1",
+          "innerIndex": 0,
+          "checked": true,
+          "sort": {
+            "status": false,
+            "type": 1,
+            "select": false
+          }
+        }
+      ],
+      "andOrType": 1, //数据过滤类型
+      "selectDataMode": 1 // 数据选择方式：单选/多选 0/1
+    }
+  },
+  {//子表单
+    "linkInfo": {
+      "linked": false,
+      "linkFormId": 0,
+      "linkFormType": "",
+      "linkFormIdEnc": "",
+      "linkValueFields": [],
+      "linkSubComptId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormValueFieldId": 0,
+      "condFields": [],
+      "isDetail": true
+    },
+    "compt": "detailcombox",//组件名称
+    "visible": true,
+    "esId": 1,//子表单在es中存储的映射id
+    "defaultComptsInfo": {//子组件默认值，子表单组件中用到,记录默认值相关信息
+      "rowNum": 0 //默认值行数
+    },
+    "editDetail": {//是否可编辑子表单，子表单组件中用到
+      "open": true
+    },
+    "pid": 0,
+    "label": "子表单",//组件信息名
+    "compts": [//子组件，子表单组件中用到
+      {
+        "compt": "editinput",
+        "alias": "4",
+        "pid": 3,
+        "id": 4,
+         ...
+        "fields": [{...}]
+      }
+    ],
+    "displayStyle": {//子表单横纵显示，子表单组件中用到
+      "pcDisplayStyle": "column",
+      "fieldWidthStyle": "{}"
+    },
+    "addDetail": {//是否可增加子表单，子表单组件中用到
+      "text": "添加",
+      "open": true,
+      "minLimit": "",
+      "maxLimit": "",
+      "batchImport": false,
+      "importTemplate": {
+        "fileName": "",
+        "suffix": "",
+        "resId": "",
+        "objectId": "",
+        "open": false
+      }
+    },
+    "alias": "3",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      },
+      "field": "{\"layout\":[1,1],\"title\":{\"position\":\"top\",\"align\":\"left\"}}"
+    },
+    "tip": {//组件提示名
+      "text": "",
+      "imgs": []
+    },
+    "defaultCompts": [],//子组件默认值，子表单组件中用到
+    "deleteDetail": {//是否可删除子表单，子表单组件中用到
+      "open": true
+    },
+    "id": 3
+  },
+  {//下拉框
+  "id": 11,
+  "compt": "selectbox",
+  "alias": "11",
+  "pid": 0,
+  "style": {
+    "layout": [
+      1,
+      1
+    ],
+    "title": {
+      "position": "top",
+      "align": "left"
+    }
+  },
+  "linkInfo": {
+    "linkFormType": "", //联动类型
+    "condFields": [], //联动动态条件
+    "linkFormId": 0, //联动表单id
+    "linkFormValueFieldCompt": "",//联动字段类型名
+    "linkFormIdEnc": "", //联动表单id验证enc
+    "linkFormValueFieldId": 0, //联动字段id
+    "linked": false //是否配置过数据联动
+  },
+  "defaultLinkInfo": {//下拉框/下拉复选框设置默认值的数据联动配置
+    "linkFormType": "",//联动类型
+    "condFields": [], //联动动态条件
+    "linkFormId": 0, //联动表单id
+    "linkFormValueFieldCompt": "",//联动字段类型名
+    "linkFormIdEnc": "",//联动表单id验证enc
+    "linkFormValueFieldId": 0,//联动字段id
+    "linked": false,//是否配置过数据联动
+    "innerIndex": 0 // 组件内部fields的下标 比如日期范围组件
+  },
+  "defaultOptionSort": {// 下拉框/下拉复选框设置默认值的数据联动配置 数据联动排序规则
+    "id": -3, // 排序Id，枚举类OptionSortEnum
+    "sort": "asc" // 排序规则（倒叙：desc，正序：asc）
+  },
+  "optionScoreShow": false, //是否显示选项分值
+  "optionSort": {
+    "id": -3,
+    "sort": "asc"
+  },
+  "optionScoreUsed": false, //是否选项分值参与计算
+  "otherAllowed": false, //选项类组件设置其他选项功能相关设置属性
+  "latestValShow": false,
+  "optionsLoadFromUrl": { //下拉框选项从第三方地址获取
+    "isLoadFromUrl": false, //是否配置从第三方地址获取
+    "response": [],
+    "url": [],
+    "urlHeaders": []
+  },
+  "optionColor": false, //是否打开颜色设置
+  "fields": [
+    {
+      "hasDefaultValue": false,
+      "visible": true,
+      "editable": true,
+      "values": [],
+      "options": [ //选项内容列表
+        {
+          "idArr": [], //选项关联配置 显隐规则上线后弃用 目前只有老数据可能有
+          "score": 0, //选项分值
+          "color": "", //选项颜色
+          "checked": false, //是否是选中状态
+          "className": "", //选项class
+          "title": "选项1", //选项列表名称
+          "isOther": true //单选多选使用，标识是否为其他选项
+        },
+        {
+          "idArr": [],
+          "score": 0,
+          "color": "",
+          "checked": false,
+          "className": "",
+          "title": "选项2"
+        },
+        {
+          "idArr": [],
+          "score": 0,
+          "color": "",
+          "checked": false,
+          "className": "",
+          "title": "选项3"
+        }
+      ],
+      "verify": {},
+      "tip": {
+        "imgs": [],
+        "text": ""
+      },
+      "label": "下拉框",
+      "defaultValueStr": "[]",
+      "fieldType": {
+        "type": "string"
+      }
+    }
+  ],
+  "openOtherOption": false,//下拉/复选 是否开启"其他"选项功能
+  "optionBindInfo": {//下拉组件中用到 关联其他表单
+    "bindFormIdEnc": "", //绑定其它表单id验证串
+    "bindFieldId": 0, //关联的字段
+    "bindFieldIdx": -1, //绑定其它表单字段索引下标值
+    "bindFormType": "customForm", //绑定类型 关联的表单、审批标识
+    "isBinded": false, //是否配置过关联其他表单
+    "bindFormId": 0, //关联表单、审批的id
+    "originalOptions": [ //原始下拉选项值
+      {
+        "idArr": [],//选项关联配置 显隐规则上线后弃用 目前只有老数据可能有
+        "score": 0,//选项分值
+        "color": "",//选项颜色
+        "checked": false,//是否是选中状态
+        "className": "",//选项class
+        "title": "选项1"//选项列表名称
+      },
+      {
+        "idArr": [],
+        "score": 0,
+        "color": "",
+        "checked": false,
+        "className": "",
+        "title": "选项2"
+      },
+      {
+        "idArr": [],
+        "score": 0,
+        "color": "",
+        "checked": false,
+        "className": "",
+        "title": "选项3"
+      }
+    ],
+    "bindFieldCompt": ""//绑定其它表单字段compt
+  }
+  },
+  {//日期区间
+    "id": 15,
+    "compt": "datetimerange",
+    "alias": "15",
+    "pid": 0,
+    "visible": true, //日期范围字段是否可见
+    "editable": true, //日期范围字段是否可编辑
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "verify": {//日期区间组件中用到
+      "dateRange": {
+        "isInclude": false,
+        "format": "yyyy-MM-dd HH:mm",
+        "errMsg": "开始时间不能晚于结束时间"
+      },
+      "validateRange": {
+        "beginDate": "",
+        "dynamicRangeStartValue": 1,
+        "rangeType": 0,
+        "dynamicRangeEndValue": 1,
+        "endDate": "",
+        "errMsg": "请输入合法的日期范围",
+        "dynamicRangeStartType": 1,
+        "dynamicRangeEndType": 3
+      }
+    },
+    "fields": [
+      {
+        "tip": {
+          "imgs": [],
+          "text": "请选择"
+        },
+        "label": "开始时间",
+        "fieldType": {
+          "format": "yyyy-MM-dd HH:mm",
+          "type": "date"
+        }
+      },
+      {
+        "tip": {
+          "imgs": [],
+          "text": "请选择"
+        },
+        "label": "结束时间",
+        "fieldType": {
+          "format": "yyyy-MM-dd HH:mm",
+          "type": "date"
+        }
+      },
+      {
+        "label": "时长",
+        "fieldType": {
+          "unit": "day",
+          "calculate": false,
+          "type": "timerange"
+        }
+      }
+    ]
+  },
+  {//附件
+    "id": 18,
+    "compt": "fileupload",
+    "alias": "18",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "showType": 1,
+    "editFile": {// 可在线编辑已有附件，附件字段使用
+      "open": true
+    },
+    "deleteFile": {// 可删除已有附件，附件字段使用
+      "open": true
+    },
+    "downloadFile": {// 可下载已有附件/图片/视频 web端附件、图片、视频字段使用
+      "open": true
+    },
+    "linkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "fields": [//组件中的字段信息
+      {
+        "temporary": false, // 临时存储标记
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "verify": {
+          "minValue": {
+            "errMsg": "上传个数最小限制",
+            "range": ""
+          },
+          "limitSize": 0, // 限制上传文件大小
+          "maxValue": {
+            "errMsg": "上传个数最大限制",
+            "range": ""
+          },
+          "limitCount": 0, // 限制上传图片/文件/视频数量(新数据已废弃,保留用于旧数据把其值赋给MaxValue)
+          "limitType": "" // 限制上传文件类型
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "附件",
+        "fieldType": {
+          "type": "file"
+        }
+      }
+    ],
+    "addFile": { // 可新增附件，附件字段使用
+      "open": true
+    },
+    "uploadConfig": { // 图片，视频，附件的上传方式
+      "pc": [
+        0, 1],
+      "mobile": [3, 4, 0, 2]
+    },
+    "waterMark": { // 附件水印配置
+      "open": false, //是否开启
+      "waterMarkOptions": [], //水印配置
+      "condition": "" //审批状态
+    },
+    "previewConfig": {// 打开方式 附件/图片/视频字段使用
+      "openWay": 0
+    }
+  },
+  {//数字输入
+    "linkInfo": {
+      "linked": false,
+      "linkFormId": 0,
+      "linkFormType": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linkFormValueFieldCompt": "",
+      "condFields": []
+    },
+    "compt": "numberinput",
+    "alias": "2",
+    "formula": {
+      "status": false,
+      "selIndex": -1,
+      "calculateFieldId": "0"
+    },
+    "latestValShow": false,
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "id": 2,
+    "fields": [
+      {
+        "fieldType": {
+          "type": "number"
+        },
+        "label": "数字输入",
+        "placeholderMsg": "",//数字组件占位信息
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "statsable": false, //是否是统计字段
+        "verify": {
+          "minValue": {
+            "errMsg": "输入的值不能小于",
+            "range": ""
+          },
+          "realNumber": {
+            "isInteger": false,
+            "precisionLen": "", //小数位必须保留的长度，不够补0
+            "precision": "",
+            "errMsg": "请输入正确的数字类型值",
+            "precisionType": "0"  // 小数位数限定类型 0 固定 1 不超过
+          },
+          "maxValue": {
+            "errMsg": "输入的值不能大于",
+            "range": ""
+          },
+          "format": {
+            "type": ""
+          }
+        },
+        "visible": true,
+        "editable": true,
+        "micrometer": false, // 千分符
+        "capital": false, // 数字中文计数，如： 玖仟玖佰玖拾玖元整
+        "percentage": false, // 是否百分比
+        "values": [
+          {
+            "val": ""
+          }
+        ],
+        "hasDefaultValue": false,
+        "defaultValueStr": "[{\"val\":\"\"}]",
+        "inputTip": {  // 单行输入/数字输入 空值提示、前后缀图标
+          "prefix": { // 前缀
+            "color": "#C0C0C3", // 颜色
+            "icon": "" // 图标
+          },
+          "placeholder": "",  // 空值提示
+          "suffix": { // 后缀
+            "color": "#C0C0C3",
+            "icon": ""
+          }
+        }
+      }
+    ],
+    "formulaEdit": {
+      "formula": ""
+    },
+    "step": { // 计数器输入模式配置
+       "open":true,
+       "value":"1"
+    }
+  },
+  {//单选
+    "id": 9,
+    "compt": "radiobutton",
+    "alias": "9",
+    "pid": 0,
+    "otherAllowed": false,
+    "comptCombined": true, //为支持表单审批代码合并前老数据使用
+    "latestValShow": false,
+    "showType": 0, // radiobutton & checklist 选项显示类型 0 竖排 1 横排 2 矩阵
+    "optionNumber": 6, // radiobutton & checklist 选项显示矩阵排列 一行的个数
+    "optionColor": false,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "options": [
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项1",
+            "inputbox": {//选项分值弹窗中设置选项后面是否开启输入框
+              "opened": false,
+              "checked": false
+            }
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项2",
+            "inputbox": {
+              "opened": false,
+              "checked": false
+            }
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项3",
+            "inputbox": {
+              "opened": false,
+              "checked": false
+            }
+          }
+        ],
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "单选",
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "type": "string"
+        }
+      }
+    ],
+    "optionScoreShow": false,
+    "optionScoreUsed": false
+  },
+  {//多行输入
+    "id": 5,
+    "compt": "edittextarea",
+    "alias": "5",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "string"
+        },
+        "label": "多行输入",
+        "tip": {
+          "text": "",
+          "imgs": []
+        },
+        "verify": {
+          "charLimit": {
+            "open": false,
+            "minSize": "",
+            "maxSize": ""
+          }
+        },
+        "visible": true,
+        "editable": true,
+        "values": [
+          {
+            "val": ""
+          }
+        ],
+        "hasDefaultValue": false,
+        "defaultValueStr": "[{\"val\":\"\"}]"
+      }
+    ],
+    "linkInfo": {
+      "linked": false,
+      "linkFormId": 0,
+      "linkFormType": "customForm",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linkFormValueFieldCompt": "",
+      "condFields": []
+    },
+    "formula": {
+      "status": false,
+      "selIndex": -1,
+      "calculateFieldId": 0
+    },
+    "formulaEdit": {
+      "formula": ""
+    },
+    "latestValShow": false
+  },
+  {//滑动条
+    "id": 6,
+    "compt": "slider",
+    "alias": "6",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "sliderRange": { //滑动条范围
+          "maxText": "满意", //最大值文本
+          "minValue": "0", //最小值
+          "textVisible": true, //文本是否显示
+          "maxValue": "100", //最大值
+          "minText": "不满意" //最小值文本
+        },
+        "visible": true,
+        "editable": true,
+        "values": [
+          {
+            "val": "0"
+          }
+        ],
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "滑动条",
+        "fieldType": {
+          "type": "number"
+        }
+      }
+    ]
+  },
+  {//评分
+    "compt": "rate",
+    "alias": "7",
+    "id": 7,
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [
+          {
+            "val": ""
+          }
+        ],
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "评分",
+        "defaultValueStr": "[{\"val\":\"\"}]",
+        "fieldType": {
+          "type": "number"
+        },
+        "rateOptions": { //评分字段配置
+          "half": false, //是否支持半星
+          "textVisible": false, //是否显示文本
+          "num": 5, //星星数量
+          "pointVisible": false, //是否显示分值
+          "classType": 0, //星星样式类型
+          "point": 1, //星星分值
+          "tips": "" //提示文本数组串
+        }
+      }
+    ]
+  },
+  {//说明文字
+    "id": 8,
+    "compt": "captiontext",
+    "alias": "8",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "visible": true,
+        "editable": false,
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "说明文字",
+        "fieldType": {
+          "type": "string"
+        }
+      }
+    ]
+  },
+  {//多选
+    "id": 10,
+    "compt": "checklist",
+    "alias": "10",
+    "pid": 0,
+    "otherAllowed": false,
+    "comptCombined": true,
+    "latestValShow": false,
+    "showType": 0,
+    "optionNumber": 6,
+    "optionColor": false,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "options": [
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项1",
+            "inputbox": {
+              "opened": false,
+              "checked": false
+            }
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项2",
+            "inputbox": {
+              "opened": false,
+              "checked": false
+            }
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项3",
+            "inputbox": {
+              "opened": false,
+              "checked": false
+            }
+          }
+        ],
+        "verify": {
+          "minValue": {
+            "errMsg": "输入的值不能小于",
+            "range": 0
+          },
+          "maxValue": {
+            "errMsg": "输入的值不能大于",
+            "range": 0
+          }
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "多选",
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "type": "string"
+        }
+      }
+    ],
+    "optionScoreShow": false,
+    "optionScoreUsed": false
+  },
+  {//下拉复选
+    "id": 12,
+    "compt": "selectmultibox",
+    "alias": "12",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "linkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "defaultLinkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false,
+      "innerIndex": 0
+    },
+    "defaultOptionSort": {
+      "id": -3,
+      "sort": "asc"
+    },
+    "optionSort": {
+      "id": -3,
+      "sort": "asc"
+    },
+    "otherAllowed": false,
+    "latestValShow": false,
+    "optionsLoadFromUrl": {
+      "isLoadFromUrl": false,
+      "response": [],
+      "url": [],
+      "urlHeaders": []
+    },
+    "optionColor": false,
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "options": [
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项1"
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项2"
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "color": "",
+            "checked": false,
+            "className": "",
+            "title": "选项3"
+          }
+        ],
+        "verify": {
+          "minValue": {
+            "errMsg": "输入的值不能小于",
+            "range": 0
+          },
+          "maxValue": {
+            "errMsg": "输入的值不能大于",
+            "range": 0
+          }
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "下拉复选",
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "type": "string"
+        }
+      }
+    ],
+    "optionScoreShow": false,
+    "optionScoreUsed": false,
+    "openOtherOption": false,
+    "optionBindInfo": {
+      "bindFormIdEnc": "",
+      "bindFieldId": 0,
+      "bindFieldIdx": -1,
+      "bindFormType": "customForm",
+      "isBinded": false,
+      "bindFormId": 0,
+      "originalOptions": [
+        {
+          "idArr": [],
+          "score": 0,
+          "color": "",
+          "checked": false,
+          "className": "",
+          "title": "选项1"
+        },
+        {
+          "idArr": [],
+          "score": 0,
+          "color": "",
+          "checked": false,
+          "className": "",
+          "title": "选项2"
+        },
+        {
+          "idArr": [],
+          "score": 0,
+          "color": "",
+          "checked": false,
+          "className": "",
+          "title": "选项3"
+        }
+      ],
+      "bindFieldCompt": ""
+    }
+  },
+  {//多级下拉
+    "id": 13,
+    "alias": "13",
+    "pid": 0,
+    "compt": "multipleselect",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "typeTree": { //多级下拉组件中配置分类树结构
+      "name": "", //分类树名称
+      "id": -1 //分类树应用ID（TypeTreeConfig表主键）
+    },
+    "latestValShow": false,
+    "optionsLoadFromUrl": {
+      "isLoadFromUrl": false,
+      "response": [],
+      "url": [],
+      "urlHeaders": []
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "multiOptions": [ //多级下拉选项内容列表
+          {
+            "children": [],//子选项
+            "checked": false,//是否选中
+            "className": "", //选项class
+            "color": "", //选项颜色
+            "title": "选项1" //选项列表名称
+          }
+        ],
+        "editable": true,
+        "values": [],
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "多级下拉",
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "type": "multibox"
+        }
+      }
+    ]
+  },
+  {//日期
+    "id": 14,
+    "compt": "dateinput",
+    "alias": "14",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "linkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "latestValShow": false,
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "dayIndex": 0, //指定填写日期下标
+        "visible": true,
+        "editable": true,
+        "updateAppoint": false, //是否为更新日期
+        "values": [
+          {
+            "val": ""
+          }
+        ],
+        "appoint": false, //是否指定日期
+        "verify": {
+          "validateRange": { // 日期输入合法区间字段
+            "beginDate": "",
+            "dynamicRangeStartValue": 1, //天/月/年 数
+            "rangeType": 0,
+            "dynamicRangeEndValue": 1,
+            "endDate": "",
+            "errMsg": "请输入合法的日期范围",
+            "dynamicRangeStartType": 1, //1/2/3 之前/当（天/月/年）/之后
+            "dynamicRangeEndType": 3
+          }
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "日期",
+        "defaultValueStr": "[{\"val\":\"\"}]",
+        "fieldType": {
+          "format": "yyyy-MM-dd HH:mm",
+          "type": "date"
+        }
+      }
+    ],
+    "formulaEdit": {
+      "formula": ""
+    }
+  },
+  {//图片
+    "id": 16,
+    "compt": "imagebox",
+    "alias": "16",
+    "pid": 0,
+    "downloadFile": {
+      "open": true
+    },
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "linkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "uploadConfig": {
+      "pc": [
+        1
+      ],
+      "mobile": [
+        3,
+        4
+      ]
+    },
+    "previewConfig": {
+      "openWay": 0
+    },
+    "fields": [
+      {
+        "temporary": false,
+        "cropping": false, // 是否开启图片裁切
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "verify": {
+          "minValue": {
+            "errMsg": "上传个数最小限制",
+            "range": ""
+          },
+          "limitWidth": 0, // 限制上传文件宽
+          "limitSize": 0,
+          "maxValue": {
+            "errMsg": "上传个数最大限制",
+            "range": ""
+          },
+          "limitCount": 0,
+          "limitHeight": 0, // 限制文件高
+          "limitType": ""
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "图片",
+        "fieldType": {
+          "type": "img"
+        },
+        "imageOptions": { //图片和图片选择选项框样式
+          "style": 0, //图片显示样式 0: 卡片 1: 略缩图
+          "size": 1, //图片选择选项框大小，0 1 2 大 中 小
+          "displayMode": 0 //图片显示方式，0 1 填满、完整显示
+        }
+      }
+    ]
+  },
+  {//视频
+    "id": 17,
+    "compt": "videobox",
+    "alias": "17",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "downloadFile": {
+      "open": true
+    },
+    "linkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "uploadConfig": {
+      "pc": [
+        1
+      ],
+      "mobile": [
+        3,
+        4
+      ]
+    },
+    "previewConfig": {
+      "openWay": 0
+    },
+    "fields": [
+      {
+        "temporary": false,
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "verify": {
+          "minValue": {
+            "errMsg": "上传个数最小限制",
+            "range": ""
+          },
+          "limitWidth": 0,
+          "limitSize": 0,
+          "maxValue": {
+            "errMsg": "上传个数最大限制",
+            "range": ""
+          },
+          "limitDurationMaxVisible": false, // 关闭限制时长最大值
+          "limitHeight": 0,
+          "limitDurationMax": "", // 限制时长最大值
+          "limitDurationMinVisible": false, // 开启限制时长最小值
+          "limitType": "",
+          "limitCountVisible": true,
+          "durationVisible": false, // 开启限制时长
+          "limitDurationMin": "" // 限制时长最小值
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "视频",
+        "fieldType": {
+          "type": "video"
+        }
+      }
+    ]
+  },
+  {//部门
+    "id": 20,
+    "compt": "department",
+    "alias": "20",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "linkInfo": {
+      "linkFormType": "customForm",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "contactId": 0, //选中的表单内联系人字段id
+        "editable": true,
+        "values": [],
+        "name": "点击选择部门",
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "部门",
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "multiple": false,
+          "type": "department"
+        },
+        "curUserOrg": false, //默认值是否为当前用户的单位
+        "curLeaderOrg": false //默认值是否为当前用户主管的部门
+      }
+    ]
+  },
+  {//富文本
+    "linkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "pid": 0,
+    "id": 21,
+    "alias": "21",
+    "compt": "richtext",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [
+          {
+            "val": "",
+            "content": ""
+          }
+        ],
+        "verify": {
+          "charLimit": {
+            "open": false,
+            "minSize": "",
+            "maxSize": ""
+          }
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "富文本",
+        "defaultValueStr": "",
+        "fieldType": {
+          "type": "string"
+        }
+      }
+    ]
+  },
+  {//计算公式
+    "id": 22,
+    "alias": "22",
+    "pid": 0,
+    "compt": "computeinput",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "compute"
+        },
+        "label": "计算公式",
+        "tip": {
+          "text": "",
+          "imgs": []
+        },
+        "expression": [], //计算公式组件修改数据时使用
+        "visible": true,
+        "editable": false,
+        "micrometer": false,
+        "capital": false,
+        "percentage": false,
+        "precisionLen": "", //小数位必须保留的长度，不够补0
+        "verify": {
+          "chinese": false, // 计算属性使用 大写（汉字）
+          "percentage": { //百分比
+            "show": false,
+            "precision": 0 //小数点位数
+          }
+        }
+      }
+    ]
+  },
+  {//自动编号
+    "id": 23,
+    "alias": "23",
+    "pid": 0,
+    "compt": "autonumber",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "string"
+        },
+        "label": "自动编号",
+        "tip": {
+          "text": "",
+          "imgs": []
+        },
+        "verify": {},
+        "formatConfig": [ //自动编号配置
+          {
+            "title": "自动计数：5位数字，不自动重置", //显示标题
+            "contentType": "auto", // auto/date/character/field 自增编号/提交日期/固定字符/表单字段
+            "digit": 5, //位数
+            "fixStatus": true, //位数是否固定
+            "characterText": "", //固定字符
+            "cycleType": "not", //周期
+            "compt": "",  //表单字段类型
+            "id": "", //表单字段id
+            "format": "", //日期格式
+            "startValue": 1 //计数开始数值
+          }
+        ],
+        "visible": true,
+        "editable": false
+      }
+    ]
+  },
+  {//图片单选
+    "id": 24,
+    "compt": "imageradiobutton",
+    "alias": "24",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "otherAllowed": false,
+    "comptCombined": true,
+    "latestValShow": false,
+    "showType": 0,
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "options": [
+          {
+            "idArr": [],
+            "score": 0,
+            "checked": false,
+            "title": "选项1",
+            "objectId": "object-1", //图片的objectId，单选多选图片使用
+            "resid": "", //图片的resid
+            "suffix": "", //图片的类型后缀
+            "width": 0, //富文本选项图片宽度
+            "height": 0, //富文本选项图片高度
+            "prompt": "", //选项提示语单选多选图片使用
+            "richtextId": 0, //富文本选项提示语id
+            "enc": "" //富文本选项提示语id对应的enc
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "checked": false,
+            "title": "选项2",
+            "objectId": "object-1",
+            "resid": "",
+            "suffix": "",
+            "width": 0,
+            "height": 0,
+            "prompt": "",
+            "richtextId": 0,
+            "enc": ""
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "checked": false,
+            "title": "选项3",
+            "objectId": "object-1",
+            "resid": "",
+            "suffix": "",
+            "width": 0,
+            "height": 0,
+            "prompt": "",
+            "richtextId": 0,
+            "enc": ""
+          }
+        ],
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "图片单选",
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "type": "string"
+        },
+        "imageOptions": { //图片和图片选择选项框样式
+          "size": 1, //图片选择选项框大小，0 1 2 大 中 小
+          "displayMode": 1 //图片显示方式，0 1 填满、完整显示
+        }
+      }
+    ],
+    "optionScoreShow": false,
+    "optionScoreUsed": false
+  },
+  {//图片多选
+    "id": 25,
+    "compt": "imagechecklist",
+    "alias": "25",
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "otherAllowed": false,
+    "comptCombined": true,
+    "latestValShow": false,
+    "showType": 0,
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "options": [
+          {
+            "idArr": [],
+            "score": 0,
+            "checked": false,
+            "title": "选项1",
+            "objectId": "object-1",
+            "resid": "",
+            "suffix": "",
+            "width": 0,
+            "height": 0,
+            "prompt": "",
+            "richtextId": 0,
+            "enc": ""
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "checked": false,
+            "title": "选项2",
+            "objectId": "object-1",
+            "resid": "",
+            "suffix": "",
+            "width": 0,
+            "height": 0,
+            "prompt": "",
+            "richtextId": 0,
+            "enc": ""
+          },
+          {
+            "idArr": [],
+            "score": 0,
+            "checked": false,
+            "title": "选项3",
+            "objectId": "object-1",
+            "resid": "",
+            "suffix": "",
+            "width": 0,
+            "height": 0,
+            "prompt": "",
+            "richtextId": 0,
+            "enc": ""
+          }
+        ],
+        "verify": {
+          "minValue": {
+            "errMsg": "输入的值不能小于",
+            "range": 0
+          },
+          "maxValue": {
+            "errMsg": "输入的值不能大于",
+            "range": 0
+          }
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "图片多选",
+        "defaultValueStr": "[]",
+        "fieldType": {
+          "type": "string"
+        },
+        "imageOptions": { //图片和图片选择选项框样式
+          "size": 1, //图片选择选项框大小，0 1 2 大 中 小
+          "displayMode": 1  //图片显示方式，0 1 填满、完整显示
+        }
+      }
+    ],
+    "optionScoreShow": false,
+    "optionScoreUsed": false
+  },
+  {//矩阵单选
+    "id": 26,
+    "alias": "26",
+    "pid": 0,
+    "compt": "matrixradio",
+    "label": "矩阵单选",
+    "tip": {
+      "text": "",
+      "imgs": []
+    },
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "compts": [
+      {
+        "id": 27,
+        "alias": "27",
+        "compt": "radiobutton",
+        "fields": [
+          {
+            "fieldType": {
+              "type": "string"
+            },
+            "label": "标题1",
+            "options": [
+              {
+                "title": "选项1",
+                "checked": false,
+                "idArr": [],
+                "score": 0
+              },
+              {
+                "title": "选项2",
+                "checked": false,
+                "idArr": [],
+                "score": 0
+              },
+              {
+                "title": "选项3",
+                "checked": false,
+                "idArr": [],
+                "score": 0
+              }
+            ]
+          }
+        ],
+        "optionScoreUsed": false,
+        "optionScoreShow": false,
+        "pid": 26
+      },
+      {
+        "id": 28,
+        "alias": "28",
+        "compt": "radiobutton",
+        "fields": [
+          {
+            "fieldType": {
+              "type": "string"
+            },
+            "label": "标题2",
+            "options": [
+              {
+                "title": "选项1",
+                "checked": false,
+                "idArr": [],
+                "score": 0
+              },
+              {
+                "title": "选项2",
+                "checked": false,
+                "idArr": [],
+                "score": 0
+              },
+              {
+                "title": "选项3",
+                "checked": false,
+                "idArr": [],
+                "score": 0
+              }
+            ]
+          }
+        ],
+        "optionScoreUsed": false,
+        "optionScoreShow": false,
+        "pid": 26
+      }
+    ],
+    "latestValShow": false,
+    "verify": {},
+    "visible": true,
+    "editable": true
+  },
+  {//矩阵多选
+    "id": 29,
+    "alias": "29",
+    "pid": 0,
+    "compt": "matrixcheckbox",
+    "label": "矩阵多选",
+    "tip": {
+      "text": "",
+      "imgs": []
+    },
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "compts": [
+      {
+        "id": 30,
+        "alias": "30",
+        "compt": "checklist",
+        "fields": [
+          {
+            "fieldType": {
+              "type": "string"
+            },
+            "label": "标题1",
+            "options": [
+              {
+                "title": "选项1",
+                "checked": false,
+                "idArr": []
+              },
+              {
+                "title": "选项2",
+                "checked": false,
+                "idArr": []
+              },
+              {
+                "title": "选项3",
+                "checked": false,
+                "idArr": []
+              }
+            ]
+          }
+        ],
+        "pid": 29
+      },
+      {
+        "id": 31,
+        "alias": "31",
+        "compt": "checklist",
+        "fields": [
+          {
+            "fieldType": {
+              "type": "string"
+            },
+            "label": "标题2",
+            "options": [
+              {
+                "title": "选项1",
+                "checked": false,
+                "idArr": []
+              },
+              {
+                "title": "选项2",
+                "checked": false,
+                "idArr": []
+              },
+              {
+                "title": "选项3",
+                "checked": false,
+                "idArr": []
+              }
+            ]
+          }
+        ],
+        "pid": 29
+      }
+    ],
+    "latestValShow": false,
+    "verify": {},
+    "visible": true,
+    "editable": true
+  },
+  {//按钮
+    "id": 32,
+    "alias": "32",
+    "pid": 0,
+    "compt": "button",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "button"
+        },
+        "label": "按钮",
+        "name": "按钮", //按钮名称
+        "tip": {
+          "text": "",
+          "imgs": []
+        },
+        "verify": {},
+        "visible": true,
+        "editable": true,
+        "values": [],
+        "buttonOptions": { // 按钮模块选项
+          "option": 0, // 选项  0 打开URL
+          "linkConfig": { // 打开URL配置
+            "link": "", // 链接
+            "width": 600, // 链接窗口宽度
+            "widthUnit": "px", // 链接窗口宽度单位 "px", "%"
+            "height": 400, // 链接窗口高度
+            "heightUnit": "px", // 链接窗口高度单位 "px", "%"
+            "paramFields": [
+              {
+                "type": "", //参数类型
+                "label": "", //组件名
+                "cid": 0, //组件ID
+                "ftype": "" //数据类型
+              }
+            ]
+            // 动态参数配置
+          }
+        }
+      }
+    ]
+  },
+  {//直播
+    "compt": "livevideo",
+    "alias": "34",
+    "pid": 0,
+    "latestValShow": false,
+    "id": 34,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "visible": true,
+        "editable": true,
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "直播",
+        "fieldType": {
+          "type": "live"
+        }
+      }
+    ]
+  },
+  {//定位
+    "linkInfo": {
+      "linkFormType": "customForm",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "compt": "location",
+    "locationScope": { // 定位组件限定定位范围设置
+      "mapValue": [], // 0-通过固定地点限制 时地图中选择的位置信息，可选择多个
+      "linkedInfo": {}, // 1-通过其他定位字段限制 关联组件信息
+      "defaultRange": 500, // 默认限制范围500m
+      "select": false,
+      "type": 0 // 0-通过固定地点限制（从地图中选择），1-通过其他定位字段限制
+    },
+    "alias": "35",
+    "distanceRange": 0, //定位微调范围
+    "pid": 0,
+    "id": 35,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "visible": true,
+        "editable": true,
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "定位",
+        "fieldType": {
+          "type": "point"
+        }
+      }
+    ],
+    "defaultValueConfig": 0, //定位方式设置 0-获取当前位置（即原逻辑），1-从地图中选择，默认选择0-获取当前位置
+    "locationValue": 0, // 定位组件默认值获取方式 0-自定义（按定位方式手动获取）, 1-数据联动，默认0-自定义
+    "currentLocation": 0 // 定位字段用到，默认值为当前位置 0：未选中，1：选中
+  },
+  {//地址
+    "linkInfo": {
+      "linkFormType": "",
+      "condFields": [],
+      "linkFormId": 0,
+      "linkFormValueFieldCompt": "",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "linked": false
+    },
+    "compt": "areamultiselect",
+    "level": 3, //区域城市组件用到  城市组件level,比如3是详细到区县
+    "alias": "36",
+    "latestValShow": false,
+    "id": 36,
+    "pid": 0,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "hasDefaultValue": false,
+        "visible": true,
+        "multiOptions": [],
+        "editable": true,
+        "values": [
+          {
+            "val": ""
+          },
+          {
+            "val": ""
+          },
+          {
+            "val": ""
+          },
+          {
+            "val": ""
+          }
+        ],
+        "verify": {
+          "requiredLastStep": {} // 多级下拉是否必须填至最后一级
+        },
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "地址",
+        "defaultValueStr": "[{\"val\":\"\"},{\"val\":\"\"},{\"val\":\"\"},{\"val\":\"\"}]",
+        "fieldType": {
+          "type": "multibox"
+        }
+      }
+    ]
+  },
+  {//手写签名
+    "compt": "signature",
+    "alias": "37",
+    "pid": 0,
+    "id": 37,
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "visible": true,
+        "editable": true,
+        "values": [
+          {
+            "val": ""
+          }
+        ],
+        "verify": {},
+        "tip": {
+          "imgs": [],
+          "text": ""
+        },
+        "label": "手写签名",
+        "fieldType": {
+          "type": "signature"
+        },
+        "signatureSave": true  // 是否允许保存签名
+      }
+    ]
+  },
+  {//所属人
+    "id": 38,
+    "alias": "38",
+    "pid": 0,
+    "compt": "belonger",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "contact",
+          "multiple": false
+        },
+        "label": "所属人",
+        "tip": {
+          "text": "",
+          "imgs": []
+        },
+        "visible": false,
+        "editable": false,
+        "verify": {
+          "required": {}
+        },
+        "values": [],
+        "hasDefaultValue": false,
+        "defaultValueStr": "[]"
+      }
+    ],
+    "linkInfo": {
+      "linked": false,
+      "linkFormId": 0,
+      "linkFormType": "customForm",
+      "linkFormIdEnc": "",
+      "linkFormValueFieldId": 0,
+      "condFields": []
+    },
+    "loginUserForValue": true,
+    "relationValueConfig": {
+      "open": false,
+      "type": 0,
+      "condFieldId": 0
+    }
+  }
+  {//关联审批
+  "id": 1,
+  "alias": "1",
+  "pid": 0,
+  "compt": "relatedaprv",
+  "style": {
+    "layout": [
+      1,
+      1
+    ],
+    "title": {
+      "position": "top",
+      "align": "left"
+    }
+  },
+  "fields": [
+    {
+      "fieldType": {
+        "type": "relatedaprv",
+        "single": false,
+        "aprvRange": [
+          0,
+          1,
+          2
+        ],
+        "aprvTypeRange": [
+          -1,
+          -2,
+          1,
+          2
+        ]
+      },
+      "label": "关联审批",
+      "name": "点击选择审批单",
+      "tip": {
+        "text": "",
+        "imgs": []
+      },
+      "verify": {},
+      "visible": true,
+      "editable": true,
+      "values": [],
+      "approveType": "所有审批", //关联审批类型值（批量复制审批时需要重新赋值）
+      "approveTypeList": [] //关联审批单审批选择范围
+    }
+  ]
+  },
+  {//请假套件
+    "id": 2,
+    "alias": "2",
+    "pid": 0,
+    "compt": "leavekit",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "string"
+        },
+        "label": "请假类型",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        },
+        "options": [
+          {
+            "id": 198, //请假套件使用 选项id
+            "title": "事假",
+            "timeType": 3
+          },
+          {
+            "id": 199, //请假套件使用 选项id
+            "title": "病假",
+            "timeType": 3
+          }
+        ],
+        "needProcessLeave": 0, //是否开启续假
+        "leaveCancelStatus": [ // 销假状态列表
+          {
+            "status": 0, // 销假状态值
+            "originName": "无需销假", // 原始名称
+            "modifiedName": "无需销假" // 修改后的名称
+          }
+        ]
+      },
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "开始时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "结束时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "calculate": false,
+          "type": "timerange",
+          "unit": "day"
+        },
+        "label": "时长"
+      },
+      {
+        "fieldType": {
+          "type": "string"
+        },
+        "label": "请/销假状态",
+        "tip": {
+          "imgs": [],
+          "text": "请选择"
+        }
+      },
+      {
+        "fieldType": {
+          "format": "yyyy-MM-dd HH:mm",
+          "type": "date"
+        },
+        "label": "销假开始时间",
+        "tip": {
+          "imgs": [],
+          "text": "请选择"
+        }
+      },
+      {
+        "fieldType": {
+          "format": "yyyy-MM-dd HH:mm",
+          "type": "date"
+        },
+        "label": "销假结束时间",
+        "tip": {
+          "imgs": [],
+          "text": "请选择"
+        }
+      },
+      {
+        "fieldType": {
+          "unit": "day",
+          "calculate": true,
+          "type": "timerange"
+        },
+        "label": "销假时长"
+      }
+    ],
+    "verify": {
+      "dateRange": {
+        "format": "yyyy-MM-dd HH:mm",
+        "isInclude": true,
+        "errMsg": "开始时间不能晚于结束时间"
+      },
+      "required": {}
+    }
+  },
+  {//销假套件
+    "id": 3,
+    "alias": "3",
+    "pid": 0,
+    "compt": "leavecancellationkit",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "string"
+        },
+        "name": "点击选择请假审批单",
+        "label": "请假记录",
+        "tip": {
+          "text": "",
+          "imgs": []
+        },
+        "conditionArr": [ //销假触发条件
+          {
+            "leaveIdArr": [
+              198
+            ],
+            "leaveName": "事假",
+            "character": ">",
+            "characterName": "大于",
+            "leaveCancellationKitNum": 1, // 天数
+            "leaveCancellationKitUnit": 0,  // 单位 0小时，1天
+            "unitName": "小时",
+            "unitShow": false,
+            "leaveShow": false,
+            "characterShow": false
+          }
+        ],
+        "leaveCancellationKitWarn": 0, //销假限定时长是否打开
+        "leaveCancellationKitNum": 1, //销假限定时长
+        "leaveCancellationKitUnit": 0, //销假限定时长单位
+        "leaveCancellationKitLeave": 1, // 销假后才可再次请假，0-关闭，1-开启，默认开启
+        "leaveStartTimeModification": 0, // 是否可修改请假开始时间，0：关闭，1：开启，默认关闭
+        "leaveEndTimeModification": 1, // 是否可修改请假结束时间，0：关闭，1：开启，默认关闭
+        "approveType": "图片及其它文件预览",
+        "approveTypeList": [
+          {
+            "appsName": "图片及其它文件预览",
+            "formId": 10378
+          }
+        ]
+      },
+      {
+        "fieldType": {
+          "type": "string"
+        },
+        "label": "请假类型",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        },
+        "options": [
+          {
+            "id": 198,
+            "title": "事假",
+            "timeType": 3
+          }
+        ]
+      },
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "开始时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "结束时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "calculate": true,
+          "type": "timerange",
+          "unit": "day"
+        },
+        "label": "时长"
+      }
+    ],
+    "verify": {
+      "required": {}
+    }
+  },
+  {//外出套件
+    "id": 4,
+    "alias": "4",
+    "pid": 0,
+    "compt": "gooutkit",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "开始时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "结束时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "calculate": true,
+          "type": "timerange",
+          "unit": "hour",
+          "isHalf": false
+        },
+        "label": "时长"
+      }
+    ],
+    "verify": {
+      "dateRange": {
+        "format": "yyyy-MM-dd HH:mm",
+        "isInclude": true,
+        "errMsg": "开始时间不能晚于结束时间"
+      },
+      "required": {}
+    }
+  },
+  {//加班套件
+    "id": 5,
+    "alias": "5",
+    "pid": 0,
+    "compt": "overtimekit",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "开始时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "结束时间",
+        "tip": {
+          "text": "请选择",
+          "imgs": []
+        }
+      },
+      {
+        "fieldType": {
+          "calculate": true,
+          "type": "timerange"
+        },
+        "label": "时长"
+      }
+    ],
+    "verify": {
+      "dateRange": {
+        "format": "yyyy-MM-dd HH:mm",
+        "isInclude": true,
+        "errMsg": "开始时间不能晚于结束时间"
+      },
+      "required": {}
+    }
+  },
+  {//补卡套件
+    "id": 6,
+    "alias": "6",
+    "pid": 0,
+    "compt": "punchkit",
+    "style": {
+      "layout": [
+        1,
+        1
+      ],
+      "title": {
+        "position": "top",
+        "align": "left"
+      }
+    },
+    "fields": [
+      {
+        "fieldType": {
+          "type": "date",
+          "format": "yyyy-MM-dd HH:mm"
+        },
+        "label": "补卡时间",
+        "tip": "请选择"
+      },
+      {
+        "fieldType": {
+          "type": "string"
+        },
+        "label": "补卡类型",
+        "tip": {
+          "text": "",
+          "imgs": []
+        }
+      }
+    ],
+    "verify": {
+      "required": {}
+    }
+  }
+]

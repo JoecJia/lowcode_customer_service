@@ -24,7 +24,7 @@
    - **动态调整**：根据与用户交流的上下文实时调整后续步骤。
 4. **多技能调度与执行 (Execution)**：
    - **执行逻辑**：
-     - 按规划顺序调用 Skill。若输入含多媒体，优先调用 `context_transformation`。
+     - 按规划顺序调用 Skill。生成context时，若输入含多媒体，优先调用 `context_transformation`。
      - **严格执行约束 (Strict Adherence)**：**一旦确认了问题分类并启用了对应的 Skill，必须严格遵循该 Skill 文件中定义的执行步骤、逻辑判断及输出规范。严禁在执行过程中跳过 Skill 规定的必要环节。**
      - **知识检索增强**：当调用 `knowledge_retrieval` 命中内容包含图片引用时，应一并获取“命中图片”信息；在最终答复中如图片有助于用户理解，应将图片与命中文本一起输出（或输出图片路径供用户查看）。
    - **死循环监控**：
@@ -41,17 +41,17 @@
 
 ## Skill 索引 (Skill Index)
 ### 业务咨询类
-- [产品功能使用方法](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/product_feature_usage.md)：提供功能的操作路径、配置参数及注意事项，并在必要时结合具体使用案例，解决"如何做"的问题。
-- [产品功能使用案例](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/usage_scenarios.md)：解决"在什么场景用"、"如何实现"的问题。
-- [场景方案建议](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/scenario_solutions.md)：提供产品组合设计方案。
-- [搭建具体业务系统指南](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/build_business_system.md)：引导用户通过"需求拆解 -> 数据建模 -> 配置指南"三步走战略，深度磨合需求并输出系统建设方案。
+- [产品功能使用方法](skills/product_feature_usage.md)：提供功能的操作路径、配置参数及注意事项，并在必要时结合具体使用案例，解决"如何做"的问题。
+- [产品功能使用案例](skills/usage_scenarios.md)：解决"在什么场景用"、"如何实现"的问题。
+- [场景方案建议](skills/scenario_solutions.md)：提供产品组合设计方案。
+- [搭建具体业务系统指南](skills/build_business_system.md)：引导用户通过"需求拆解 -> 数据建模 -> 配置指南"三步走战略，深度磨合需求并输出系统建设方案。
 
 ### 知识与维护类
-- [知识检索](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/knowledge_retrieval/knowledge_retrieval.md)：基础底层检索能力，基于混合式检索（BM25 关键词 + 向量语义 + RRF 融合），支持返回命中文本与命中图片信息。
-- [信息补充与反问](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/clarifying_questions.md)：当用户信息不足时，通过反问获取必要信息。
-- [Context 转化与自动化索引](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/context_transformation/context_transformation.md)：处理上传文件、图片识别及索引维护。
-- [临时 Context 管理](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/temporary_context_management.md)：记录无法处理的问题或灵感。
-- [项目同步 (Git Sync)](file:///Users/joec/Joec‘s%20code/P7_lowcode_customer_service/agent_config/skills/git_sync/git_sync.md)：管理代码和文档的远程同步，支持 Windows/macOS 一键脚本。
+- [知识检索](skills/knowledge_retrieval.md)：基础底层检索能力，支持返回命中文本与命中图片信息。
+- [信息补充与反问](skills/clarifying_questions.md)：当用户信息不足时，通过反问获取必要信息。
+- [Context 转化与自动化索引](skills/context_transformation.md)：处理上传文件、图片识别及索引维护。
+- [临时 Context 管理](skills/temporary_context_management.md)：记录无法处理的问题或灵感。
+- [项目同步 (Git Sync)](skills/git_sync/git_sync.md)：管理代码和文档的远程同步，支持 Windows/macOS 一键脚本。
 
 ## 注意事项
 - **严禁删除**：在更新过程中，绝对禁止删除或修改 `git_sync`, `temporary_context_management`, `context_transformation`, `knowledge_retrieval` 的核心逻辑。

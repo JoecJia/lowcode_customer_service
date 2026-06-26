@@ -4,6 +4,14 @@ def knowledge_retrieval(_repo_dir: str, query: str, top_k: int = 3) -> dict:
     return retrieve(query, top_k=top_k)
 
 
+def _normalize_image_path(path: str) -> str:
+    """将 markdown 中的相对路径（如 ../assets/xxx/image.png）转为服务端绝对路径（/assets/xxx/image.png）。"""
+    import re
+    # ../assets/ → /assets/
+    path = re.sub(r'(?:\.\./)+assets/', '/assets/', path)
+    return path
+
+
 def format_knowledge_retrieval_result(result: dict) -> str:
     hit_text = (result.get("hit_text") or "").strip()
     images = result.get("images") or []
@@ -15,7 +23,7 @@ def format_knowledge_retrieval_result(result: dict) -> str:
         out.append("### 命中图片（可选）")
         for img in images:
             alt = (img.get("alt") or "").strip()
-            path = (img.get("path") or "").strip()
+            path = _normalize_image_path((img.get("path") or "").strip())
             source = (img.get("source") or "").strip()
             out.append(f"- alt: {alt}")
             out.append(f"  path: {path}")

@@ -15,8 +15,6 @@ import {
 import type { Session } from '../api/chat'
 import { useAuth } from '../composables/useAuth'
 
-marked.setOptions({ breaks: true, gfm: true })
-
 const { currentUser, logout } = useAuth()
 
 // ==================== DEBUG 开关 ====================
@@ -125,6 +123,21 @@ interface UIMessage {
 }
 
 // ==================== 工具函数 ====================
+
+// 自定义 marked 渲染器：将相对路径的图片 src 转为服务端绝对路径
+const markedRenderer = new marked.Renderer()
+const originalImageRenderer = markedRenderer.image.bind(markedRenderer)
+markedRenderer.image = function (token: any): string {
+  const href: string = token.href
+  // ../assets/xxx → /assets/xxx  （兜底修正，防止 LLM 输出的相对路径图片显示为裂图）
+  if (href.startsWith('../assets/') || href.includes('/../assets/')) {
+    token.href = href.replace(/(?:\.\.\/)+assets\//g, '/assets/')
+  }
+  return originalImageRenderer(token)
+}
+
+marked.setOptions({ breaks: true, gfm: true, renderer: markedRenderer })
+
 function renderMarkdown(text: string): string {
   if (!text) return ''
   return marked.parse(text) as string

@@ -189,15 +189,35 @@ class FAISSIndexManager:
 
     def save(self, path: str = INDEX_PATH) -> None:
         import faiss
+        import tempfile
+        import shutil
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        faiss.write_index(self._index, path)
+        # FAISS C++ fopen 可能无法处理含全角字符的路径，先写临时文件再移动
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".faiss", prefix="faiss_")
+        os.close(tmp_fd)
+        try:
+            faiss.write_index(self._index, tmp_path)
+            shutil.move(tmp_path, path)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     def load(self, path: str = INDEX_PATH) -> bool:
         import faiss
+        import tempfile
+        import shutil
         if not os.path.exists(path):
             return False
-        self._index = faiss.read_index(path)
-        return True
+        # FAISS C++ fopen 可能无法处理含全角字符的路径，先复制到临时文件再读取
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".faiss", prefix="faiss_")
+        os.close(tmp_fd)
+        try:
+            shutil.copy2(path, tmp_path)
+            self._index = faiss.read_index(tmp_path)
+            return True
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     def search(self, query_vector: np.ndarray, top_k: int = 5) -> tuple[np.ndarray, np.ndarray]:
         if self._index is None:

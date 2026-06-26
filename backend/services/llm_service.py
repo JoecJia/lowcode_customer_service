@@ -212,6 +212,14 @@ def stream_chat_completions(
         yield ("error", f"HTTP {e.code} {e.reason}\n{body}")
 
 
+def _safe_write(text: str, file) -> None:
+    """写入 stdout，忽略控制台编码不支持的字符（如 emoji）。"""
+    try:
+        file.write(text)
+    except UnicodeEncodeError:
+        file.write(text.encode(file.encoding or "utf-8", errors="replace").decode(file.encoding or "utf-8"))
+
+
 def call_chat_completions_stream(
     api_key: str,
     payload: dict,
@@ -226,22 +234,22 @@ def call_chat_completions_stream(
             assistant_reasoning.append(text)
             if not saw_think:
                 saw_think = True
-                sys.stdout.write("<think>\n")
-            sys.stdout.write(text)
+                _safe_write("<think>\n", sys.stdout)
+            _safe_write(text, sys.stdout)
             sys.stdout.flush()
         elif delta_type == "content":
             assistant_content.append(text)
             if saw_think:
-                sys.stdout.write("\n</think>\n")
+                _safe_write("\n</think>\n", sys.stdout)
                 saw_think = False
-            sys.stdout.write(text)
+            _safe_write(text, sys.stdout)
             sys.stdout.flush()
         elif delta_type == "error":
             print(text, file=sys.stderr)
             raise RuntimeError(text)
 
     if saw_think:
-        sys.stdout.write("\n</think>\n")
+        _safe_write("\n</think>\n", sys.stdout)
         sys.stdout.flush()
 
     return ("".join(assistant_content), "".join(assistant_reasoning))

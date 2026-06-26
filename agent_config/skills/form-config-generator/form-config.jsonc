@@ -1,0 +1,291 @@
+{
+  // ============================================================
+  // 表单配置文件
+  // 说明: 此文件定义了表单的完整结构和校验规则
+  // 格式: JSONC (支持 // 和 /* */ 注释)
+  // ============================================================
+
+  "form": {
+    // 表单唯一标识，用于区分不同表单
+    "id": "user_info_form",
+    // 表单名称，显示在表单顶部
+    "name": "用户信息表单",
+    // 表单描述，显示在名称下方
+    "description": "请填写您的基本信息",
+    // 提交接口地址 (API endpoint)
+    "action": "/api/user/info",
+    // 请求方法: POST | PUT | PATCH
+    "method": "POST",
+    // 表单布局方式: horizontal(水平) | vertical(垂直) | inline(行内)
+    "layout": "vertical",
+    // 标签文本宽度，单位 px
+    "labelWidth": 100,
+    // 提交按钮文本
+    "submitText": "提交",
+    // 重置按钮文本，设为空字符串则隐藏重置按钮
+    "resetText": "重置"
+  },
+
+  // ----------------------------------------------------------
+  // 字段列表 - 定义表单中的所有字段
+  // ----------------------------------------------------------
+  "fields": [
+    {
+      // 字段唯一标识，对应后端字段名
+      "name": "username",
+      // 字段类型: input | textarea | select | radio | checkbox | switch | datepicker | timepicker | upload | number | password | email | cascader | slider | rate
+      "type": "input",
+      // 字段标签，显示在输入框左侧或上方
+      "label": "用户名",
+      // 输入框占位符文本
+      "placeholder": "请输入用户名",
+      // 默认值
+      "defaultValue": "",
+      // 是否必填
+      "required": true,
+      // 是否禁用
+      "disabled": false,
+      // 是否只读
+      "readonly": false,
+      // 悬浮提示信息
+      "tooltip": "用户名长度为2-20个字符",
+      // 校验规则列表
+      "rules": [
+        {
+          // 规则类型: required | pattern | min | max | minLength | maxLength | email | url | integer | float | custom
+          "type": "required",
+          // 校验失败时的提示信息
+          "message": "请输入用户名"
+        },
+        {
+          "type": "minLength",
+          "min": 2,
+          "message": "用户名至少需要2个字符"
+        },
+        {
+          "type": "maxLength",
+          "max": 20,
+          "message": "用户名不能超过20个字符"
+        },
+        {
+          "type": "pattern",
+          // 正则表达式: 只允许字母、数字、下划线、中文
+          "pattern": "^[a-zA-Z0-9_\\u4e00-\\u9fa5]+$",
+          "message": "用户名只能包含字母、数字、下划线和中文"
+        }
+      ],
+      // 选项列表 (type 为 select/radio/checkbox 时使用)
+      "options": [],
+      // 控件额外属性 (透传给底层组件)
+      "props": {
+        "maxlength": 20,
+        "clearable": true
+      }
+    },
+    {
+      "name": "email",
+      "type": "email",
+      "label": "邮箱",
+      "placeholder": "请输入邮箱地址",
+      "defaultValue": "",
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "请填写有效的邮箱地址",
+      "rules": [
+        {
+          "type": "required",
+          "message": "请输入邮箱地址"
+        },
+        {
+          "type": "email",
+          "message": "请输入有效的邮箱地址"
+        }
+      ],
+      "options": [],
+      "props": {
+        "clearable": true
+      }
+    },
+    {
+      "name": "gender",
+      "type": "radio",
+      "label": "性别",
+      "placeholder": "",
+      "defaultValue": "male",
+      "required": true,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "",
+      "rules": [
+        {
+          "type": "required",
+          "message": "请选择性别"
+        }
+      ],
+      // radio/checkbox/select 类型的选项列表
+      "options": [
+        { "label": "男", "value": "male" },
+        { "label": "女", "value": "female" },
+        { "label": "保密", "value": "other" }
+      ],
+      "props": {}
+    },
+    {
+      "name": "city",
+      "type": "select",
+      "label": "所在城市",
+      "placeholder": "请选择城市",
+      "defaultValue": "",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "",
+      "rules": [],
+      "options": [
+        { "label": "北京", "value": "beijing" },
+        { "label": "上海", "value": "shanghai" },
+        { "label": "广州", "value": "guangzhou" },
+        { "label": "深圳", "value": "shenzhen" },
+        { "label": "杭州", "value": "hangzhou" }
+      ],
+      "props": {
+        "clearable": true,
+        "filterable": true
+      }
+    },
+    {
+      "name": "age",
+      "type": "number",
+      "label": "年龄",
+      "placeholder": "请输入年龄",
+      "defaultValue": null,
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "",
+      "rules": [
+        {
+          "type": "integer",
+          "message": "请输入整数"
+        },
+        {
+          "type": "min",
+          "min": 1,
+          "message": "年龄不能小于1"
+        },
+        {
+          "type": "max",
+          "max": 150,
+          "message": "年龄不能大于150"
+        }
+      ],
+      "options": [],
+      "props": {
+        "min": 1,
+        "max": 150,
+        "step": 1
+      }
+    },
+    {
+      "name": "bio",
+      "type": "textarea",
+      "label": "个人简介",
+      "placeholder": "请简单介绍一下自己",
+      "defaultValue": "",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "",
+      "rules": [
+        {
+          "type": "maxLength",
+          "max": 500,
+          "message": "简介不能超过500个字符"
+        }
+      ],
+      "options": [],
+      "props": {
+        "rows": 4,
+        "maxlength": 500,
+        "showWordLimit": true
+      }
+    },
+    {
+      "name": "subscribe",
+      "type": "switch",
+      "label": "订阅通知",
+      "placeholder": "",
+      "defaultValue": true,
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "开启后将收到我们的邮件通知",
+      "rules": [],
+      "options": [],
+      "props": {
+        "activeText": "开启",
+        "inactiveText": "关闭"
+      }
+    },
+    {
+      "name": "hobbies",
+      "type": "checkbox",
+      "label": "兴趣爱好",
+      "placeholder": "",
+      "defaultValue": [],
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "",
+      "rules": [],
+      "options": [
+        { "label": "阅读", "value": "reading" },
+        { "label": "运动", "value": "sports" },
+        { "label": "音乐", "value": "music" },
+        { "label": "旅行", "value": "travel" },
+        { "label": "编程", "value": "coding" }
+      ],
+      "props": {}
+    },
+    {
+      "name": "birthDate",
+      "type": "datepicker",
+      "label": "出生日期",
+      "placeholder": "请选择日期",
+      "defaultValue": "",
+      "required": false,
+      "disabled": false,
+      "readonly": false,
+      "tooltip": "",
+      "rules": [],
+      "options": [],
+      "props": {
+        "valueFormat": "yyyy-MM-dd",
+        "clearable": true
+      }
+    }
+  ],
+
+  // ----------------------------------------------------------
+  // 分组配置 (可选) - 将字段分组展示
+  // ----------------------------------------------------------
+  "groups": [
+    {
+      // 分组标题
+      "title": "基本信息",
+      // 该分组包含的字段 (对应 fields[].name)
+      "fields": ["username", "email", "gender", "birthDate", "age"],
+      // 是否可折叠
+      "collapsible": false,
+      // 默认是否折叠
+      "collapsed": false
+    },
+    {
+      "title": "详细信息",
+      "fields": ["city", "bio", "hobbies", "subscribe"],
+      "collapsible": true,
+      "collapsed": false
+    }
+  ]
+}

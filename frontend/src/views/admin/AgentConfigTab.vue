@@ -71,8 +71,19 @@ async function onNodeClick(node: TreeNode) {
   }
 }
 
+// 自定义 marked 渲染器：将相对路径的图片 src 转为服务端绝对路径
+const markedRenderer = new marked.Renderer()
+const originalImageRenderer = markedRenderer.image.bind(markedRenderer)
+markedRenderer.image = function (token: any): string {
+  const href: string = token.href
+  if (href.startsWith('../assets/') || href.includes('/../assets/')) {
+    token.href = href.replace(/(?:\.\.\/)+assets\//g, '/assets/')
+  }
+  return originalImageRenderer(token)
+}
+
 function renderMarkdown(raw: string): string {
-  return marked.parse(raw, { breaks: true }) as string
+  return marked.parse(raw, { breaks: true, renderer: markedRenderer }) as string
 }
 </script>
 

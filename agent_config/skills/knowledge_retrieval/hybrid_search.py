@@ -48,17 +48,21 @@ class BM25Retriever:
 
 class VectorRetriever:
     def __init__(self, embedder: Optional[EmbeddingModel] = None):
-        self._embedder = embedder or EmbeddingModel()
         self._index_mgr = FAISSIndexManager()
         self._loaded = self._index_mgr.load()
         self._meta = load_chunk_meta() if self._loaded else None
+        # 仅在 FAISS 索引存在时才加载嵌入模型，避免无索引时卡在模型下载
+        if self._loaded and self._meta and self._meta.get("chunks"):
+            self._embedder = embedder or EmbeddingModel()
+        else:
+            self._embedder = None
 
     @property
     def ready(self) -> bool:
         return self._loaded
 
     def search(self, query: str, top_k: int = VECTOR_TOP_K) -> list[tuple[int, float]]:
-        if not self._loaded or self._meta is None:
+        if not self._loaded or self._meta is None or self._embedder is None:
             return []
         query_vec = self._embedder.encode([query], is_query=True)
         distances, indices = self._index_mgr.search(query_vec, top_k)
