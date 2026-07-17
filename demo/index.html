@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>浏览器操作控制台</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f0f2f5;
+      color: #1e293b;
+      display: flex;
+      height: 100vh;
+    }
+
+    /* 左侧面板 */
+    .sidebar {
+      width: 320px;
+      background: #fff;
+      border-right: 1px solid #e2e8f0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .sidebar h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #10b981, #059669);
+      width: 100%;
+      font-size: 15px;
+      padding: 12px;
+    }
+    .btn-success:hover {
+      background: linear-gradient(135deg, #059669, #047857);
+      box-shadow: 0 2px 10px rgba(5, 150, 105, 0.35);
+    }
+
+    .btn-outline {
+      background: #fff;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+    .btn-outline:hover {
+      background: #f1f5f9;
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .step-list {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.8;
+    }
+    .step-list li {
+      margin-bottom: 4px;
+    }
+
+    .extension-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #94a3b8;
+      flex-shrink: 0;
+    }
+    .status-dot.connected {
+      background: #22c55e;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+    }
+
+    /* 右侧主区域 */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .main-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .command-input {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .command-input label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .command-input textarea {
+      flex: 1;
+      min-height: 280px;
+      padding: 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+      background: #fff;
+    }
+    .command-input textarea:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .output-panel {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 14px;
+      font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .output-panel .error {
+      color: #f87171;
+    }
+    .output-panel .success {
+      color: #4ade80;
+    }
+    .output-panel .info {
+      color: #94a3b8;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .running-indicator {
+      font-size: 13px;
+      color: #3b82f6;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .running-indicator.active {
+      display: inline-flex;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 左侧面板 -->
+  <aside class="sidebar">
+    <h2>🖥 操作控制台</h2>
+
+    <!-- 插件安装 -->
+    <div class="card">
+      <h3>🔌 浏览器插件</h3>
+      <p style="font-size:12px;color:#64748b;margin-bottom:8px;">
+        首次使用请先安装浏览器插件：
+      </p>
+      <button class="btn btn-primary" onclick="installExtension()" style="width:100%;">
+        安装插件
+      </button>
+      <div class="extension-status" style="margin-top:10px;" id="extStatus">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">检测中...</span>
+      </div>
+    </div>
+
+    <!-- 命令格式说明 -->
+    <div class="card">
+      <h3>📋 支持的命令</h3>
+      <ul class="step-list">
+        <li><code>click</code> — 点击元素</li>
+        <li><code>fill</code> — 填写输入框</li>
+        <li><code>select</code> — 下拉选择</li>
+        <li><code>hover</code> — 悬停</li>
+        <li><code>drag</code> — 拖拽</li>
+        <li><code>press</code> — 按键</li>
+        <li><code>getText</code> — 获取文本</li>
+        <li><code>getValue</code> — 获取输入值</li>
+        <li><code>getAttribute</code> — 获取属性</li>
+        <li><code>scroll</code> — 滚动页面</li>
+        <li><code>navigate</code> — 打开 URL</li>
+        <li><code>wait</code> — 等待毫秒</li>
+        <li><code>waitForSelector</code> — 等待元素</li>
+        <li><code>evaluate</code> — 执行 JS</li>
+        <li><code>screenshot</code> — 截图</li>
+      </ul>
+    </div>
+
+    <!-- 示例 -->
+    <div class="card">
+      <h3>📝 快速填入示例</h3>
+      <div class="btn-row" style="flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="loadExample('baidu')">百度搜索</button>
+        <button class="btn btn-outline btn-sm" onclick="loadExample('login')">简单点击</button>
+        <button class="btn btn-outline btn-sm" onclick="loadExample('drag')">拖拽示例</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 右侧主区域 -->
+  <main class="main">
+    <div class="main-header">
+      <h2>📤 操作指令</h2>
+      <div class="running-indicator" id="runningIndicator">
+        <span style="animation:spin 1s linear infinite;">⏳</span> 执行中...
+      </div>
+    </div>
+
+    <div class="command-input">
+      <label for="commandTextarea">指令内容（JSON 格式）</label>
+      <textarea
+        id="commandTextarea"
+        placeholder='在此输入操作指令，JSON 格式，一条或多条步骤...
+示例：
+[
+  { "action": "click", "selector": "#login-btn" },
+  { "action": "fill", "selector": "#username", "value": "admin" }
+]'
+      >[
+  { "action": "navigate", "url": "https://www.baidu.com" },
+  { "action": "wait", "ms": 1000 },
+  { "action": "fill", "selector": "#kw", "value": "hello world" },
+  { "action": "click", "selector": "#su" },
+  { "action": "wait", "ms": 2000 },
+  { "action": "getText", "selector": ".result" }
+]</textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-success" id="runBtn" onclick="runCommands()">
+        ▶ 执行
+      </button>
+      <button class="btn btn-outline" onclick="clearOutput()">
+        清空输出
+      </button>
+    </div>
+
+    <div class="output-panel" id="output">
+      <span class="info">等待输入指令...</span>
+    </div>
+  </main>
+
+  <script>
+    // ============================================================
+    // 控制台页面逻辑
+    // ============================================================
+
+    let commandCounter = 0;
+
+    // --- 安装插件 -------------------------------------------------
+    function installExtension() {
+      alert(
+        "Chrome 不支持从网页直接安装插件。\n\n" +
+        "请手动加载：\n" +
+        "1. 打开 chrome://extensions/\n" +
+        "2. 开启右上角「开发者模式」\n" +
+        "3. 点击「加载已解压的扩展程序」\n" +
+        "4. 选择当前文件夹下的 extension 目录\n\n" +
+        "路径: demo/extension/"
+      );
+    }
+
+    // --- 检测插件状态 ---------------------------------------------
+    function checkExtensionStatus() {
+      const dot = document.getElementById("statusDot");
+      const text = document.getElementById("statusText");
+
+      // 发送心跳检测
+      window.postMessage({ type: "EXTENSION_PING", ts: Date.now() }, "*");
+
+      // 3 秒内没收到回应则认为未安装
+      const timeout = setTimeout(() => {
+        dot.className = "status-dot";
+        text.textContent = "插件未检测到";
+      }, 3000);
+
+      const handler = (event) => {
+        if (event.data && event.data.type === "EXTENSION_PONG") {
+          clearTimeout(timeout);
+          dot.className = "status-dot connected";
+          text.textContent = "插件已连接";
+          window.removeEventListener("message", handler);
+        }
+      };
+
+      window.addEventListener("message", handler);
+
+      // 初始检测
+      window.postMessage({ type: "EXTENSION_PING", ts: Date.now() }, "*");
+    }
+
+    // --- 加载示例 -------------------------------------------------
+    const examples = {
+      baidu: `[
+  { "action": "navigate", "url": "https://www.baidu.com" },
+  { "action": "wait", "ms": 1000 },
+  { "action": "fill", "selector": "#kw", "value": "hello world" },
+  { "action": "click", "selector": "#su" },
+  { "action": "wait", "ms": 2000 },
+  { "action": "getText", "selector": ".result" }
+]`,
+      login: `[
+  { "action": "click", "selector": "#btn" },
+  { "action": "fill", "selector": "input", "value": "测试文本" },
+  { "action": "getText", "selector": "h1" }
+]`,
+      drag: `[
+  { "action": "drag", "source": ".drag-item", "target": ".drop-zone" }
+]`,
+    };
+
+    function loadExample(name) {
+      document.getElementById("commandTextarea").value = examples[name];
+    }
+
+    // --- 执行命令 -------------------------------------------------
+    async function runCommands() {
+      const textarea = document.getElementById("commandTextarea");
+      const runBtn = document.getElementById("runBtn");
+      const indicator = document.getElementById("runningIndicator");
+      const output = document.getElementById("output");
+
+      let steps;
+      try {
+        steps = JSON.parse(textarea.value);
+        if (!Array.isArray(steps)) throw new Error("指令必须是 JSON 数组");
+      } catch (e) {
+        output.innerHTML = `<span class="error">JSON 解析失败: ${e.message}</span>`;
+        return;
+      }
+
+      const commandId = ++commandCounter;
+      runBtn.disabled = true;
+      indicator.classList.add("active");
+      output.innerHTML = `<span class="info">正在执行 ${steps.length} 条指令...</span>`;
+
+      // 监听结果
+      const resultHandler = (event) => {
+        if (event.data && event.data.type === "EXTENSION_RESULT" && event.data.commandId === commandId) {
+          window.removeEventListener("message", resultHandler);
+          runBtn.disabled = false;
+          indicator.classList.remove("active");
+
+          const { results } = event.data;
+          let html = "";
+          for (const r of results) {
+            const cls = r.success ? "success" : "error";
+            const icon = r.success ? "✓" : "✗";
+            html += `<span class="${cls}">${icon} [${r.index}] ${r.action}`;
+            if (r.data !== undefined && r.data !== "") {
+              html += ` → ${JSON.stringify(r.data)}`;
+            }
+            if (r.error) {
+              html += ` — ${r.error}`;
+            }
+            if (r.selector) {
+              html += ` (${r.selector})`;
+            }
+            html += `</span>\n`;
+          }
+          output.innerHTML = html || `<span class="info">执行完毕，无返回数据</span>`;
+        }
+      };
+
+      window.addEventListener("message", resultHandler);
+
+      // 超时保护 (30s)
+      setTimeout(() => {
+        window.removeEventListener("message", resultHandler);
+        if (runBtn.disabled) {
+          runBtn.disabled = false;
+          indicator.classList.remove("active");
+          output.innerHTML = `<span class="error">执行超时 (30s)</span>`;
+        }
+      }, 30000);
+
+      // 发送命令到 Content Script
+      window.postMessage({ type: "EXTENSION_COMMAND", commandId, steps }, "*");
+    }
+
+    function clearOutput() {
+      document.getElementById("output").innerHTML = `<span class="info">已清空</span>`;
+    }
+
+    // --- 键盘快捷键 (Ctrl+Enter 执行) ----------------------------
+    document.getElementById("commandTextarea").addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key === "Enter") {
+        e.preventDefault();
+        runCommands();
+      }
+    });
+
+    // --- 初始化 ---------------------------------------------------
+    checkExtensionStatus();
+    // 每 5 秒重新检测
+    setInterval(checkExtensionStatus, 5000);
+  </script>
+</body>
+</html>

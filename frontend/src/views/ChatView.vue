@@ -119,6 +119,7 @@ interface UIMessage {
   showThinking?: boolean
   isStreaming?: boolean
   showRegenerate?: boolean
+  error?: string
   created_at?: number
 }
 
@@ -342,6 +343,7 @@ async function sendMessage() {
     (_error) => {
       assistantMsg.isStreaming = false
       assistantMsg.showRegenerate = true
+      assistantMsg.error = _error
       isStreaming.value = false
       abortController = null
       if (DEBUG_STREAM) console.debug('[Vue] onError:', _error)
@@ -365,6 +367,7 @@ async function handleRegenerate(msg: UIMessage) {
   msg.content = ''
   msg.reasoning = ''
   msg.showRegenerate = false
+  msg.error = undefined
   msg.showThinking = true
   msg.isStreaming = true
   msg.tasks = []
@@ -414,6 +417,7 @@ async function handleRegenerate(msg: UIMessage) {
     (_error) => {
       msg.isStreaming = false
       msg.showRegenerate = true
+      msg.error = _error
       isStreaming.value = false
       abortController = null
       if (DEBUG_STREAM) console.debug('[Vue] onError(regenerate):', _error)
@@ -510,11 +514,11 @@ async function handleFeedback() {
   try {
     await submitFeedback(currentSessionId.value)
     hasFeedback.value = true
-    ElMessage.warning('当前对话已反馈管理员，请勿重复点击～')
+    ElMessage.warning('当前问答已反馈管理员，请勿重复点击～')
   } catch (err: any) {
     if (err?.status === 409) {
       hasFeedback.value = true
-      ElMessage.warning('当前对话已反馈管理员，请勿重复点击～')
+      ElMessage.warning('当前问答已反馈管理员，请勿重复点击～')
     }
   }
 }
@@ -782,6 +786,20 @@ onBeforeUnmount(() => {
             @keydown.escape="cancelEditTitle"
             @blur="commitEditTitle"
           />
+          <button
+            class="btn-feedback-top"
+            :class="{ active: hasFeedback }"
+            @click="handleFeedback"
+            title="不满意本次问答"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M2.5 2.5h11v8H7l-3.5 3v-3H2.5z"/>
+              <path d="M5.5 6h5M5.5 8.5h3"/>
+              <circle cx="12.5" cy="3.5" r="2.5" fill="#FAAD14" stroke="none"/>
+              <path d="M12.5 2.5v1.2M12.5 4.3v.2" stroke="#fff" stroke-width="1.2"/>
+            </svg>
+            {{ hasFeedback ? '已反馈' : '不满意本次问答' }}
+          </button>
         </div>
 
         <div class="user-info">
@@ -894,6 +912,12 @@ onBeforeUnmount(() => {
                 <!-- 流式光标 -->
                 <span v-if="msg.isStreaming" class="streaming-cursor">▊</span>
 
+                <!-- 错误提示 -->
+                <div
+                  v-if="msg.error"
+                  class="msg-error"
+                >{{ msg.error }}</div>
+
                 <!-- 重新生成按钮 -->
                 <button
                   v-if="msg.showRegenerate"
@@ -913,19 +937,6 @@ onBeforeUnmount(() => {
 
       <!-- 底部区域 -->
       <div class="bottom-area">
-        <!-- 不满意反馈按钮 -->
-        <div class="feedback-row">
-          <button
-            class="btn-feedback"
-            @click="handleFeedback"
-          >
-            <svg viewBox="0 0 14 14" fill="currentColor">
-              <path d="M7 1a.75.75 0 01.75.75v5.035l1.72-1.72a.75.75 0 111.06 1.06l-2.828 2.828a1 1 0 01-1.414 0L3.46 6.125a.75.75 0 111.06-1.06L6.25 6.785V1.75A.75.75 0 017 1zM2.25 7.75a.75.75 0 00-1.5 0v3A1.75 1.75 0 002.5 12.5h9a1.75 1.75 0 001.75-1.75v-3a.75.75 0 00-1.5 0v3a.25.25 0 01-.25.25h-9a.25.25 0 01-.25-.25v-3z"/>
-            </svg>
-            {{ hasFeedback ? '已反馈' : '不满意本次回答？' }}
-          </button>
-        </div>
-
         <!-- 输入区域 -->
         <div class="input-row">
           <div class="input-wrapper-bottom">
@@ -1226,7 +1237,7 @@ onBeforeUnmount(() => {
 .chat-title-area {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .chat-title-text {
@@ -1639,6 +1650,21 @@ onBeforeUnmount(() => {
 }
 .regenerate-btn svg { width: 13px; height: 13px; }
 
+/* 错误信息 */
+.msg-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #ef4444;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
 /* ==================== 底部区域 ==================== */
 .bottom-area {
   background: var(--color-bg-card);
@@ -1647,18 +1673,13 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-.feedback-row {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.btn-feedback {
+/* 顶部反馈按钮 */
+.btn-feedback-top {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 16px;
-  font-size: 13px;
+  gap: 5px;
+  padding: 5px 14px;
+  font-size: 12px;
   color: var(--color-text-tertiary);
   background: none;
   border: 1px solid var(--color-border);
@@ -1666,21 +1687,29 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.btn-feedback:hover {
+.btn-feedback-top:hover {
   color: var(--color-warning);
   border-color: var(--color-warning);
   background: #FFF8EC;
 }
-.btn-feedback svg { width: 14px; height: 14px; }
+.btn-feedback-top.active {
+  color: var(--color-text-disabled);
+  border-color: var(--color-border-light);
+  cursor: default;
+  background: var(--color-bg-hover);
+}
+.btn-feedback-top svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 .input-row { position: relative; }
 .input-wrapper-bottom { position: relative; }
 
 .msg-input {
   width: 100%;
-  min-height: 64px;
-  max-height: 150px;
+  min-height: 128px;
+  max-height: 250px;
   padding: 14px 48px 14px 16px;
   font-size: 14px;
   color: var(--color-text-primary);
@@ -1706,8 +1735,8 @@ onBeforeUnmount(() => {
 
 .btn-send {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
+  right: 10px;
+  bottom: 10px;
   width: 28px;
   height: 28px;
   border: none;

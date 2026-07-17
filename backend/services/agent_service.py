@@ -1,178 +1,22 @@
-"""对话路由：SSE 流式对话 + 会话 CRUD。"""
+"""Agent 核心服务：SSE 流过滤、上下文截断、Agent 多轮循环调度。"""
 
-import os
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-
-from dependencies.auth import get_current_user
-from services.agent_service import (
-    agent_loop_stream,
-    clean_task_blocks,
-    empty_stream,
-    truncate_messages,
-)
-from services.session_service import get_session_store
-from services.skill_service import get_system_messages
-
-router = APIRouter(prefix="/api")
-
-
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str
-    new_session: bool = False
-
-
-@router.post("/chat")
-async def chat(request: ChatRequest, current_user: Optional[dict] = Depends(get_current_user)):
-    api_key = os.environ.get("ARK_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="ARK_API_KEY not configured")
-
-    store = get_session_store()
-    user_id = int(current_user["sub"]) if current_user else None
-
-    if request.new_session:
-        session_id = store.create_session(user_id=user_id)
-        return StreamingResponse(
-            empty_stream(session_id),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Session-Id": session_id,
-            },
-        )
-
-    session_id = request.session_id
-    if not request.message.strip():
-        raise HTTPException(status_code=400, detail="message is required")
-
-    # 校验会话存在且未被软删除
-    owner = store.get_session_owner(session_id)
-    if owner is None:
-        raise HTTPException(status_code=404, detail="session not found")
-    if store.is_session_deleted(session_id):
-        raise HTTPException(status_code=404, detail="session not found")
-
-    store.append_message(session_id, "user", request.message)
-
-    system_msgs = get_system_messages()
-    history_msgs = store.get_messages(session_id)[0]  # (messages, has_more)
-    # 截断上下文
-    truncated = truncate_messages(
-        system_msgs,
-        [{"role": m["role"], "content": m["content"]} for m in history_msgs],
-    )
-
-    return StreamingResponse(
-        agent_loop_stream(api_key, truncated, session_id),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Session-Id": session_id,
-        },
-    )
-
-
-@router.get("/sessions")
-async def list_sessions(
-    limit: int = Query(default=10, ge=1, le=50),
-    offset: int = Query(default=0, ge=0),
-    current_user: Optional[dict] = Depends(get_current_user),
-):
-    store = get_session_store()
-    user_id = int(current_user["sub"]) if current_user else None
-    sessions, total, has_more = store.list_sessions(
-        limit=limit,
-        offset=offset,
-        user_id=user_id,
-    )
-    return {"sessions": sessions, "total": total, "has_more": has_more}
-
-
-@router.get("/sessions/{session_id}/messages")
-async def get_session_messages(
-    session_id: str,
-    limit: int = Query(default=50, ge=1, le=200),
-    before_id: Optional[int] = Query(default=None),
-):
-    store = get_session_store()
-    messages, has_more = store.get_messages(session_id, limit=limit, before_id=before_id)
-
-    # 过滤 <task_result> 用户消息
-    visible = [m for m in messages if not (
-        m["role"] == "user" and m["content"].startswith("<task_result>")
-    )]
-    return {"session_id": session_id, "messages": visible, "has_more": has_more}
-
-
-@router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    current_user: Optional[dict] = Depends(get_current_user),
-):
-    store = get_session_store()
-    user_id = int(current_user["sub"]) if current_user else None
-
-    # 校验会话存在且属于当前用户
-    owner = store.get_session_owner(session_id)
-    if owner is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
-    if user_id and owner != user_id:
-        raise HTTPException(status_code=404, detail="会话不存在")
-
-    # 检查是否已删除
-    if store.is_session_deleted(session_id):
-        raise HTTPException(status_code=409, detail="会话已删除")
-
-    store.delete_session(session_id)
-    return {"ok": True}
-
-
-class UpdateTitleRequest(BaseModel):
-    title: str
-
-
-@router.patch("/sessions/{session_id}")
-async def update_session_title(session_id: str, body: UpdateTitleRequest):
-    store = get_session_store()
-    store.update_session_title(session_id, body.title)
-    return {"ok": True}
 import json
 import os
 import re
 import sys
 import urllib.error
-from typing import AsyncGenerator, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from typing import AsyncGenerator
 
 from config import DEBUG, MAX_AGENT_TURNS, MAX_TASK_CALLS, REPO_DIR
-from dependencies.auth import get_current_user
 from services.llm_service import build_ssl_context, parse_tasks, stream_chat_completions
 from services.session_service import get_session_store
 from services.skill_service import dispatch_skill, format_task_result, get_system_messages
 
-router = APIRouter(prefix="/api")
-
-# 上下文截断阈值
+# ── 上下文截断阈值 ──
 MAX_CONTEXT_CHARS = 64000
 MIN_RETAIN_ROUNDS = 10
 
-
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str
-    new_session: bool = False
-
-
+# ── Task JSON 流式过滤正则 ──
 _RAW_TASK_JSON_RE = re.compile(
     r'\[\s*\{\s*"(?:name|type|task_type)"\s*:\s*"[^"]*"\s*,\s*"query"\s*:\s*"(?:[^"\\]|\\.)*?"'
     r'(?:\s*,\s*"(?:top_k|k)"\s*:\s*\d+)?\s*\}'
@@ -181,13 +25,13 @@ _RAW_TASK_JSON_RE = re.compile(
     r'\s*\]',
 )
 _START_RAW_JSON = re.compile(r'\[\s*\{\s*"(?:name|type|task_type)"\s*:\s*"')
-
-
 _TAIL_PARTIAL_JSON = re.compile(r'^\[[^\]()]*$')
 
 
-def _truncate_messages(system_msgs: list[dict], history_msgs: list[dict]) -> list[dict]:
-    """上下文截断：从头部丢弃旧消息，保留最近轮次"""
+# ── 上下文截断 ──
+
+def truncate_messages(system_msgs: list[dict], history_msgs: list[dict]) -> list[dict]:
+    """上下文截断：从头部丢弃旧消息，保留最近轮次。"""
     total = sum(len(m.get("content", "")) for m in system_msgs + history_msgs)
     if total <= MAX_CONTEXT_CHARS:
         return system_msgs + history_msgs
@@ -202,6 +46,8 @@ def _truncate_messages(system_msgs: list[dict], history_msgs: list[dict]) -> lis
 
     return system_msgs + truncated
 
+
+# ── Task 流式过滤 ──
 
 def _partial_tag_len_at_end(s: str) -> int:
     """检测字符串末尾是否有 <task> 或 </task> 的片段前缀，返回长度。
@@ -221,7 +67,8 @@ def _partial_tag_len_at_end(s: str) -> int:
     return 0
 
 
-def _filter_task_stream(stream):
+def filter_task_stream(stream):
+    """过滤流式 content 中的 <task>...</task> 块和裸 JSON 数组，防止泄漏到前端。"""
     out = ""
     pending = ""
     in_block = 0
@@ -402,6 +249,8 @@ def _filter_task_stream(stream):
         print(f"[filter] end: out={repr(out[:80])} pending={repr(pending[:80])} in_block={in_block}", file=sys.stderr)
 
 
+# ── Task 文本清理 ──
+
 def _strip_raw_task_arrays(text: str) -> str:
     result: list[str] = []
     i = 0
@@ -424,11 +273,14 @@ def _strip_raw_task_arrays(text: str) -> str:
     return ''.join(result)
 
 
-def _clean_task_blocks(text: str) -> str:
+def clean_task_blocks(text: str) -> str:
+    """清除文本中所有 <task>...</task> 块和裸 JSON 数组。"""
     text = re.sub(r'<task>[\s\S]*?</task>', '', text, flags=re.IGNORECASE)
     text = _strip_raw_task_arrays(text)
     return text.strip()
 
+
+# ── 工具函数 ──
 
 def _tee_collect(source, collected: list):
     """包装一个迭代器，使其在遍历时同步收集所有产出的元素到 collected 列表中。
@@ -440,11 +292,14 @@ def _tee_collect(source, collected: list):
         yield item
 
 
-async def _agent_loop_stream(
+# ── Agent 多轮循环 ──
+
+async def agent_loop_stream(
     api_key: str,
     messages: list[dict],
     session_id: str,
 ) -> AsyncGenerator[str, None]:
+    """Agent 多轮对话循环：流式调用 LLM，解析 Task，调度 Skill，输出 SSE 事件。"""
     ssl_context = build_ssl_context()
     store = get_session_store()
     task_calls = 0
@@ -465,7 +320,7 @@ async def _agent_loop_stream(
 
         content_parts: list[str] = []
         reasoning_parts: list[str] = []
-        # raw_content_parts: 保存未经 _filter_task_stream 过滤的原始内容，用于 task 解析
+        # raw_content_parts: 保存未经 filter_task_stream 过滤的原始内容，用于 task 解析
         raw_content_parts: list[str] = []
         saw_think = False
 
@@ -475,7 +330,7 @@ async def _agent_loop_stream(
             collected: list[tuple[str, str]] = []
             llm_stream = stream_chat_completions(api_key, payload, ssl_context)
 
-            for delta_type, text in _filter_task_stream(_tee_collect(llm_stream, collected)):
+            for delta_type, text in filter_task_stream(_tee_collect(llm_stream, collected)):
                 if delta_type == "reasoning":
                     reasoning_parts.append(text)
                     if not saw_think:
@@ -496,7 +351,7 @@ async def _agent_loop_stream(
                         store.append_message(
                             session_id,
                             "assistant",
-                            _clean_task_blocks("".join(all_content_parts)),
+                            clean_task_blocks("".join(all_content_parts)),
                             "".join(all_reasoning_parts),
                         )
                     return
@@ -515,7 +370,7 @@ async def _agent_loop_stream(
                 store.append_message(
                     session_id,
                     "assistant",
-                    _clean_task_blocks("".join(all_content_parts)),
+                    clean_task_blocks("".join(all_content_parts)),
                     "".join(all_reasoning_parts),
                 )
             return
@@ -526,7 +381,7 @@ async def _agent_loop_stream(
                 store.append_message(
                     session_id,
                     "assistant",
-                    _clean_task_blocks("".join(all_content_parts)),
+                    clean_task_blocks("".join(all_content_parts)),
                     "".join(all_reasoning_parts),
                 )
             return
@@ -534,7 +389,7 @@ async def _agent_loop_stream(
         assistant_content = "".join(content_parts)
         assistant_reasoning = "".join(reasoning_parts)
 
-        # 累积内容：content 中的任务块已被 _filter_task_stream 过滤，直接累积
+        # 累积内容：content 中的任务块已被 filter_task_stream 过滤，直接累积
         if assistant_content:
             all_content_parts.append(assistant_content)
         if assistant_reasoning:
@@ -555,7 +410,7 @@ async def _agent_loop_stream(
 
         if not tasks:
             # 所有任务已完成，保存最终结果：一条 assistant 消息
-            final_content = _clean_task_blocks("".join(all_content_parts))
+            final_content = clean_task_blocks("".join(all_content_parts))
             final_reasoning = "".join(all_reasoning_parts)
             if final_content or final_reasoning:
                 store.append_message(
@@ -571,7 +426,7 @@ async def _agent_loop_stream(
             task_calls += 1
             if task_calls > MAX_TASK_CALLS:
                 yield f"event: warning\ndata: {json.dumps({'content': 'Too many task calls, stopping.'})}\n\n"
-                final_content = _clean_task_blocks("".join(all_content_parts))
+                final_content = clean_task_blocks("".join(all_content_parts))
                 final_reasoning = "".join(all_reasoning_parts)
                 if final_content or final_reasoning:
                     store.append_message(session_id, "assistant", final_content, final_reasoning)
@@ -582,7 +437,7 @@ async def _agent_loop_stream(
             last_task_fingerprints.append(fingerprint)
             if len(last_task_fingerprints) >= 4 and len(set(last_task_fingerprints[-3:])) == 1:
                 yield f"event: warning\ndata: {json.dumps({'content': 'Repeated task detected, stopping.'})}\n\n"
-                final_content = _clean_task_blocks("".join(all_content_parts))
+                final_content = clean_task_blocks("".join(all_content_parts))
                 final_reasoning = "".join(all_reasoning_parts)
                 if final_content or final_reasoning:
                     store.append_message(session_id, "assistant", final_content, final_reasoning)
@@ -601,131 +456,13 @@ async def _agent_loop_stream(
             yield f"event: warning\ndata: {json.dumps({'content': 'Max turns reached.'})}\n\n"
 
     # 循环结束（达到最大轮次）
-    final_content = _clean_task_blocks("".join(all_content_parts))
+    final_content = clean_task_blocks("".join(all_content_parts))
     final_reasoning = "".join(all_reasoning_parts)
     if final_content or final_reasoning:
         store.append_message(session_id, "assistant", final_content, final_reasoning)
     yield "event: done\ndata: {}\n\n"
 
 
-@router.post("/chat")
-async def chat(request: ChatRequest, current_user: Optional[dict] = Depends(get_current_user)):
-    api_key = os.environ.get("ARK_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="ARK_API_KEY not configured")
-
-    store = get_session_store()
-    user_id = int(current_user["sub"]) if current_user else None
-
-    if request.new_session:
-        session_id = store.create_session(user_id=user_id)
-        return StreamingResponse(
-            _empty_stream(session_id),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Session-Id": session_id,
-            },
-        )
-
-    session_id = request.session_id
-    if not request.message.strip():
-        raise HTTPException(status_code=400, detail="message is required")
-
-    # 校验会话存在且未被软删除
-    owner = store.get_session_owner(session_id)
-    if owner is None:
-        raise HTTPException(status_code=404, detail="session not found")
-    if store.is_session_deleted(session_id):
-        raise HTTPException(status_code=404, detail="session not found")
-
-    store.append_message(session_id, "user", request.message)
-
-    system_msgs = get_system_messages()
-    history_msgs = store.get_messages(session_id)[0]  # (messages, has_more)
-    # 截断上下文
-    truncated = _truncate_messages(
-        system_msgs,
-        [{"role": m["role"], "content": m["content"]} for m in history_msgs],
-    )
-
-    return StreamingResponse(
-        _agent_loop_stream(api_key, truncated, session_id),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Session-Id": session_id,
-        },
-    )
-
-
-async def _empty_stream(session_id: str) -> AsyncGenerator[str, None]:
-    yield f"event: done\ndata: {{}}\n\n"
-
-
-@router.get("/sessions")
-async def list_sessions(
-    limit: int = Query(default=10, ge=1, le=50),
-    offset: int = Query(default=0, ge=0),
-    current_user: Optional[dict] = Depends(get_current_user),
-):
-    store = get_session_store()
-    user_id = int(current_user["sub"]) if current_user else None
-    sessions, total, has_more = store.list_sessions(
-        limit=limit,
-        offset=offset,
-        user_id=user_id,
-    )
-    return {"sessions": sessions, "total": total, "has_more": has_more}
-
-
-@router.get("/sessions/{session_id}/messages")
-async def get_session_messages(
-    session_id: str,
-    limit: int = Query(default=50, ge=1, le=200),
-    before_id: Optional[int] = Query(default=None),
-):
-    store = get_session_store()
-    messages, has_more = store.get_messages(session_id, limit=limit, before_id=before_id)
-
-    # 过滤 <task_result> 用户消息
-    visible = [m for m in messages if not (
-        m["role"] == "user" and m["content"].startswith("<task_result>")
-    )]
-    return {"session_id": session_id, "messages": visible, "has_more": has_more}
-
-
-@router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    current_user: Optional[dict] = Depends(get_current_user),
-):
-    store = get_session_store()
-    user_id = int(current_user["sub"]) if current_user else None
-
-    # 校验会话存在且属于当前用户
-    owner = store.get_session_owner(session_id)
-    if owner is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
-    if user_id and owner != user_id:
-        raise HTTPException(status_code=404, detail="会话不存在")
-
-    # 检查是否已删除
-    if store.is_session_deleted(session_id):
-        raise HTTPException(status_code=409, detail="会话已删除")
-
-    store.delete_session(session_id)
-    return {"ok": True}
-
-
-class UpdateTitleRequest(BaseModel):
-    title: str
-
-
-@router.patch("/sessions/{session_id}")
-async def update_session_title(session_id: str, body: UpdateTitleRequest):
-    store = get_session_store()
-    store.update_session_title(session_id, body.title)
-    return {"ok": True}
+async def empty_stream(session_id: str) -> AsyncGenerator[str, None]:
+    """空流响应，用于新建会话时仅返回 session_id。"""
+    yield "event: done\ndata: {}\n\n"

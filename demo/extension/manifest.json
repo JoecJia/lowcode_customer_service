@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "浏览器操作执行器",
+  "version": "1.0",
+  "description": "接收 Web 页面指令，在目标页面执行浏览器操作",
+  "permissions": ["tabs", "activeTab", "storage", "notifications"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
+}

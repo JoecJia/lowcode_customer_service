@@ -3,12 +3,28 @@ import os
 import re
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Generator
 
 from config import ARK_CHAT_COMPLETIONS_URL, DEBUG
+
+
+def _extract_api_error(body: str) -> str:
+    """从 API 返回的 JSON 错误体中提取可读的错误信息。"""
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return body
+    if isinstance(data, dict):
+        err = data.get("error") or {}
+        if isinstance(err, dict):
+            msg = err.get("message") or err.get("code") or json.dumps(err, ensure_ascii=False)
+            return str(msg)
+        return str(err)
+    return body
 
 
 @dataclass(frozen=True)
@@ -165,51 +181,89 @@ def stream_chat_completions(
     payload: dict,
     ssl_context: ssl.SSLContext,
 ) -> Generator[tuple[str, str], None, None]:
+    """调用火山引擎 Chat Completions API，返回 (delta_type, text) 的流式生成器。
+
+    对 502/503/504 等临时性服务端错误自动重试，最多 3 次，间隔递增。
+    """
+    RETRIABLE_STATUSES = {502, 503, 504}
+    MAX_RETRIES = 3
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
     }
-    req = urllib.request.Request(
-        ARK_CHAT_COMPLETIONS_URL,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
 
-    try:
-        with urllib.request.urlopen(req, timeout=300, context=ssl_context) as resp:
-            content_type = resp.headers.get("Content-Type", "")
-            if "text/event-stream" not in content_type and "application/json" in content_type:
-                body = resp.read().decode("utf-8", errors="replace")
-                yield ("error", body)
-                return
+    last_error = None
 
-            for data in iter_sse_data_lines(resp):
-                if data == "[DONE]":
+    for attempt in range(MAX_RETRIES + 1):
+        req = urllib.request.Request(
+            ARK_CHAT_COMPLETIONS_URL,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=300, context=ssl_context) as resp:
+                content_type = resp.headers.get("Content-Type", "")
+                if "text/event-stream" not in content_type and "application/json" in content_type:
+                    body = resp.read().decode("utf-8", errors="replace")
+                    yield ("error", f"API 错误: {_extract_api_error(body)}")
                     return
 
-                try:
-                    event = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
+                for data in iter_sse_data_lines(resp):
+                    if data == "[DONE]":
+                        return
 
-                choices = event.get("choices") or []
-                if not choices:
-                    continue
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
 
-                delta = (choices[0] or {}).get("delta") or {}
+                    choices = event.get("choices") or []
+                    if not choices:
+                        continue
 
-                reasoning = delta.get("reasoning_content")
-                if reasoning:
-                    yield ("reasoning", reasoning)
-                    continue
+                    delta = (choices[0] or {}).get("delta") or {}
 
-                content = delta.get("content")
-                if content:
-                    yield ("content", content)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        yield ("error", f"HTTP {e.code} {e.reason}\n{body}")
+                    reasoning = delta.get("reasoning_content")
+                    if reasoning:
+                        yield ("reasoning", reasoning)
+                        continue
+
+                    content = delta.get("content")
+                    if content:
+                        yield ("content", content)
+                return  # 正常结束，不再重试
+
+        except urllib.error.HTTPError as e:
+            last_error = e
+            if e.code in RETRIABLE_STATUSES and attempt < MAX_RETRIES:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                if DEBUG:
+                    print(f"[llm] HTTP {e.code}，第 {attempt + 1} 次重试，等待 {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            body = e.read().decode("utf-8", errors="replace")
+            yield ("error", f"HTTP {e.code}: {_extract_api_error(body)}")
+            return
+
+        except urllib.error.URLError as e:
+            last_error = e
+            if attempt < MAX_RETRIES:
+                wait = 2 ** attempt
+                if DEBUG:
+                    print(f"[llm] URLError: {e.reason}，第 {attempt + 1} 次重试，等待 {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            yield ("error", f"网络连接失败（已重试 {MAX_RETRIES} 次）: {e.reason}")
+            return
+
+    # 所有重试耗尽
+    if last_error is not None:
+        body = getattr(last_error, 'read', lambda: b'')()
+        body_str = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else ""
+        yield ("error", f"服务暂时不可用（已重试 {MAX_RETRIES} 次）\n{_extract_api_error(body_str)}")
 
 
 def _safe_write(text: str, file) -> None:
