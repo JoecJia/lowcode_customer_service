@@ -5,20 +5,16 @@ import sqlite3
 import time
 from threading import Lock
 
-from config import DB_PATH
+from database import get_db
 from services.auth_service import hash_password
 
 _lock = Lock()
 
 
-def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
 
 def list_accounts(search: str = "", offset: int = 0, limit: int = 20) -> tuple[list[dict], int]:
-    with _get_conn() as conn:
+    with get_db() as conn:
+        conn.row_factory = sqlite3.Row
         if search:
             where = "WHERE username LIKE ?"
             params = (f"%{search}%",)
@@ -72,7 +68,7 @@ def create_account(username: str, password: str, can_chat: int = 1, can_admin: i
     now = time.time()
     hashed = hash_password(password)
     with _lock:
-        with _get_conn() as conn:
+        with get_db() as conn:
             try:
                 cursor = conn.execute(
                     """INSERT INTO users (username, password, role, avatar, can_chat, can_admin, created_at, updated_at)
@@ -87,6 +83,14 @@ def create_account(username: str, password: str, can_chat: int = 1, can_admin: i
     return {"ok": True, "user_id": user_id, "username": username}
 
 
+def get_username_by_id(user_id: int) -> str | None:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT username FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    return row[0] if row else None
+
+
 def update_password(user_id: int, password: str) -> dict:
     if not password:
         return {"ok": False, "detail": "请输入新密码"}
@@ -98,7 +102,7 @@ def update_password(user_id: int, password: str) -> dict:
     hashed = hash_password(password)
     now = time.time()
     with _lock:
-        with _get_conn() as conn:
+        with get_db() as conn:
             conn.execute(
                 "UPDATE users SET password = ?, updated_at = ? WHERE id = ?",
                 (hashed, now, user_id),
@@ -115,7 +119,7 @@ def update_permissions(user_id: int, can_chat: int, can_admin: int, username: st
 
     now = time.time()
     with _lock:
-        with _get_conn() as conn:
+        with get_db() as conn:
             conn.execute(
                 "UPDATE users SET can_chat = ?, can_admin = ?, updated_at = ? WHERE id = ?",
                 (can_chat, can_admin, now, user_id),

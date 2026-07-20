@@ -7,7 +7,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from config import DB_PATH
+from database import get_db
 from dependencies.auth import get_current_user, require_admin
 from services.session_service import get_feedback_service, get_session_store
 
@@ -66,7 +66,7 @@ async def list_feedbacks(
     limit: int = Query(default=20, ge=1, le=100),
     admin: dict = Depends(require_admin),
 ):
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_db() as conn:
         conn.row_factory = sqlite3.Row
 
         where_clause = ""
@@ -120,7 +120,7 @@ async def get_feedback_detail(
     feedback_id: int,
     admin: dict = Depends(require_admin),
 ):
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_db() as conn:
         conn.row_factory = sqlite3.Row
 
         fb = conn.execute(
@@ -213,7 +213,7 @@ async def resolve_feedback(
         pass
 
     # 更新反馈状态
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_db() as conn:
         conn.execute(
             "UPDATE feedback SET status = 'resolved' WHERE id = ?",
             (feedback_id,),

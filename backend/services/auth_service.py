@@ -7,51 +7,13 @@ from threading import Lock
 import bcrypt
 import jwt
 
-from config import DB_PATH
+from database import get_db
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DAYS = 7
 
 _lock = Lock()
-
-
-def _get_conn() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
-
-
-def init_users_table() -> None:
-    with _get_conn() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                username    TEXT    NOT NULL UNIQUE,
-                password    TEXT    NOT NULL,
-                role        TEXT    DEFAULT 'user',
-                avatar      TEXT    DEFAULT '',
-                created_at  REAL    NOT NULL,
-                updated_at  REAL    NOT NULL
-            )
-        """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)
-        """)
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN user_id INTEGER REFERENCES users(id)")
-        except Exception:
-            pass
-        try:
-            conn.execute("ALTER TABLE users ADD COLUMN can_chat INTEGER DEFAULT 1")
-        except Exception:
-            pass
-        try:
-            conn.execute("ALTER TABLE users ADD COLUMN can_admin INTEGER DEFAULT 0")
-        except Exception:
-            pass
-        conn.commit()
 
 
 def hash_password(password: str) -> str:
@@ -80,11 +42,10 @@ def decode_token(token: str) -> dict:
 
 
 def register_user(username: str, password: str, can_chat: int = 1, can_admin: int = 0) -> dict:
-    init_users_table()
     now = time.time()
     hashed = hash_password(password)
     with _lock:
-        with _get_conn() as conn:
+        with get_db() as conn:
             try:
                 cursor = conn.execute(
                     "INSERT INTO users (username, password, role, avatar, can_chat, can_admin, created_at, updated_at) VALUES (?, ?, 'user', '', ?, ?, ?, ?)",
@@ -98,8 +59,7 @@ def register_user(username: str, password: str, can_chat: int = 1, can_admin: in
 
 
 def authenticate_user(username: str, password: str) -> dict:
-    init_users_table()
-    with _get_conn() as conn:
+    with get_db() as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT id, username, password, role, avatar, can_chat, can_admin FROM users WHERE username = ?",
@@ -126,8 +86,7 @@ def authenticate_user(username: str, password: str) -> dict:
 
 
 def get_user_by_id(user_id: int) -> dict | None:
-    init_users_table()
-    with _get_conn() as conn:
+    with get_db() as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT id, username, role, avatar, can_chat, can_admin FROM users WHERE id = ?",

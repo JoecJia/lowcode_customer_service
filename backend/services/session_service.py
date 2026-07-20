@@ -1,112 +1,19 @@
-import os
 import sqlite3
 import time
 import uuid
 from threading import Lock
 from typing import Optional
 
-from config import DB_PATH, SESSION_TTL_SECONDS
+from config import SESSION_TTL_SECONDS
+from database import get_db
 
 
 class SessionStore:
     def __init__(self):
         self._lock = Lock()
         self._temp_sessions: dict[str, dict] = {}
-        self._init_db()
-        self._migrate_db()
 
-    def _init_db(self):
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS sessions (
-                    id TEXT PRIMARY KEY,
-                    title TEXT DEFAULT '',
-                    status TEXT DEFAULT 'active',
-                    created_at REAL NOT NULL,
-                    updated_at REAL NOT NULL
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    reasoning_content TEXT DEFAULT '',
-                    created_at REAL NOT NULL,
-                    FOREIGN KEY (session_id) REFERENCES sessions(id)
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_messages_session
-                ON messages(session_id, created_at)
-            """)
-            # feedback table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS feedback (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id  TEXT    NOT NULL,
-                    user_id     INTEGER NOT NULL,
-                    created_at  REAL    NOT NULL,
-                    status      TEXT    DEFAULT 'pending',
-                    FOREIGN KEY (session_id) REFERENCES sessions(id),
-                    FOREIGN KEY (user_id) REFERENCES users(id)
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_feedback_session ON feedback(session_id)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_feedback_user_session ON feedback(user_id, session_id)
-            """)
-            conn.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_unique ON feedback(user_id, session_id)
-            """)
-            conn.commit()
 
-    def _migrate_db(self):
-        """追加新增列和索引（幂等）"""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                # sessions 表补列
-                for col, col_def in [
-                    ("user_id", "INTEGER"),
-                    ("deleted_at", "REAL"),
-                ]:
-                    try:
-                        conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {col_def}")
-                        conn.commit()
-                    except sqlite3.OperationalError:
-                        pass  # 列已存在
-
-                # 补索引
-                indexes = [
-                    "idx_sessions_user_id ON sessions(user_id)",
-                    "idx_sessions_user_deleted ON sessions(user_id, deleted_at)",
-                    "idx_sessions_updated ON sessions(updated_at DESC)",
-                    "idx_feedback_session ON feedback(session_id)",
-                    "idx_feedback_user_session ON feedback(user_id, session_id)",
-                ]
-                for idx_def in indexes:
-                    idx_name = idx_def.split(" ON ")[0].strip()
-                    try:
-                        conn.execute(f"CREATE INDEX IF NOT EXISTS {idx_def}")
-                        conn.commit()
-                    except sqlite3.OperationalError:
-                        pass
-
-                # feedback 唯一约束
-                try:
-                    conn.execute(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_unique ON feedback(user_id, session_id)"
-                    )
-                    conn.commit()
-                except sqlite3.OperationalError:
-                    pass
-        except sqlite3.OperationalError:
-            pass
 
     def create_session(self, title: str = "", user_id: int | None = None) -> str:
         sid = uuid.uuid4().hex
@@ -118,7 +25,7 @@ class SessionStore:
                 "created_at": now,
                 "last_active": now,
             }
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.execute(
                 "INSERT INTO sessions (id, title, status, user_id, created_at, updated_at) VALUES (?, ?, 'active', ?, ?, ?)",
                 (sid, title, user_id, now, now),
@@ -138,7 +45,7 @@ class SessionStore:
     ) -> tuple[list[dict], bool]:
         """获取消息列表，返回 (messages, has_more)"""
         self._touch_temp(session_id)
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.row_factory = sqlite3.Row
             if before_id is not None:
                 rows = conn.execute(
@@ -203,7 +110,7 @@ class SessionStore:
                     "last_active": now,
                 }
 
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.execute(
                 "INSERT INTO messages (session_id, role, content, reasoning_content, created_at) VALUES (?, ?, ?, ?, ?)",
                 (session_id, role, content, reasoning_content, now),
@@ -215,7 +122,7 @@ class SessionStore:
             conn.commit()
 
     def archive_session(self, session_id: str) -> None:
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.execute(
                 "UPDATE sessions SET status = 'archived', updated_at = ? WHERE id = ?",
                 (time.time(), session_id),
@@ -226,7 +133,7 @@ class SessionStore:
     def delete_session(self, session_id: str) -> None:
         """软删除：设置 deleted_at 时间戳，保留消息数据"""
         now = time.time()
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.execute(
                 "UPDATE sessions SET deleted_at = ?, updated_at = ? WHERE id = ?",
                 (now, now, session_id),
@@ -236,7 +143,7 @@ class SessionStore:
 
     def get_session_owner(self, session_id: str) -> int | None:
         """获取会话的 user_id，用于鉴权"""
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT user_id FROM sessions WHERE id = ?",
@@ -248,7 +155,7 @@ class SessionStore:
 
     def is_session_deleted(self, session_id: str) -> bool:
         """检查会话是否已被软删除"""
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             row = conn.execute(
                 "SELECT deleted_at FROM sessions WHERE id = ?",
                 (session_id,),
@@ -258,7 +165,7 @@ class SessionStore:
         return False
 
     def update_session_title(self, session_id: str, title: str) -> None:
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.execute(
                 "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
                 (title, time.time(), session_id),
@@ -272,7 +179,7 @@ class SessionStore:
         user_id: int | None = None,
     ) -> tuple[list[dict], int, bool]:
         """返回 (sessions, total, has_more)，按 updated_at 倒序，仅返回未删除的会话"""
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.row_factory = sqlite3.Row
 
             # 查询条件和参数
@@ -345,7 +252,7 @@ class FeedbackService:
 
     def submit_feedback(self, session_id: str, user_id: int) -> tuple[bool, str]:
         """提交反馈。返回 (ok, message)"""
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             # 检查是否已存在
             existing = conn.execute(
                 "SELECT id FROM feedback WHERE user_id = ? AND session_id = ?",
@@ -364,7 +271,7 @@ class FeedbackService:
 
     def check_feedback(self, session_id: str, user_id: int) -> bool:
         """检查用户是否已对某会话提交过反馈"""
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             row = conn.execute(
                 "SELECT id FROM feedback WHERE user_id = ? AND session_id = ?",
                 (user_id, session_id),
@@ -388,3 +295,4 @@ def get_feedback_service() -> FeedbackService:
     if _feedback_service is None:
         _feedback_service = FeedbackService()
     return _feedback_service
+    

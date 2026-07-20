@@ -8,6 +8,7 @@ from dependencies.auth import require_admin
 from services.agent_config_service import get_file_content, get_file_tree
 from services.admin_service import (
     create_account,
+    get_username_by_id,
     list_accounts,
     update_password,
     update_permissions,
@@ -124,16 +125,11 @@ async def change_permissions(
     body: UpdatePermissionsRequest,
     admin: dict = Depends(require_admin),
 ):
-    # 获取用户名用于判断 admin 保护
-    import sqlite3
-    from config import DB_PATH
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
-    if not row:
+    username = get_username_by_id(user_id)
+    if username is None:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    result = update_permissions(user_id, body.can_chat, body.can_admin, row["username"])
+    result = update_permissions(user_id, body.can_chat, body.can_admin, username)
     if not result["ok"]:
         raise HTTPException(status_code=403, detail=result["detail"])
     return {"ok": True, "message": "权限修改成功"}
