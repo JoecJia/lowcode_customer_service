@@ -49,7 +49,7 @@
 ### 知识与维护类
 - [知识检索](skills/knowledge_retrieval.md)：基础底层检索能力，支持返回命中文本与命中图片信息。
 - [信息补充与反问](skills/clarifying_questions.md)：当用户信息不足时，通过反问获取必要信息。
-- [Context 转化与自动化索引](skills/context_transformation.md)：处理上传文件、图片识别及索引维护。
+- [Context 转化与自动化索引](skills/context_transformation.md)：处理上传文件、图片压缩、图片识别及索引维护。
 - [临时 Context 管理](skills/temporary_context_management.md)：记录无法处理的问题或灵感。
 - [项目同步 (Git Sync)](skills/git_sync/git_sync.md)：管理代码和文档的远程同步，支持 Windows/macOS 一键脚本。
 
