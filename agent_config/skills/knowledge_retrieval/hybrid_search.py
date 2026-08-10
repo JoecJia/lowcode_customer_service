@@ -53,7 +53,12 @@ class VectorRetriever:
         self._meta = load_chunk_meta() if self._loaded else None
         # 仅在 FAISS 索引存在时才加载嵌入模型，避免无索引时卡在模型下载
         if self._loaded and self._meta and self._meta.get("chunks"):
-            self._embedder = embedder or EmbeddingModel()
+            try:
+                self._embedder = embedder or EmbeddingModel()
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                self._embedder = None
         else:
             self._embedder = None
 
