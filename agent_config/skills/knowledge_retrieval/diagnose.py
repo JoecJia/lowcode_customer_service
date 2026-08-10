@@ -4,7 +4,10 @@ import sys
 import traceback
 
 # 确保 agent_config 在 sys.path 中（与 main.py 一致）
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+AGENT_CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, AGENT_CONFIG_DIR)
+# 再将项目根目录也加入，以便 from backend.xxx 可用
+sys.path.insert(0, os.path.dirname(AGENT_CONFIG_DIR))
 
 PASS = "  PASS"
 FAIL = "  FAIL"
@@ -48,7 +51,7 @@ def main():
 
     # ── 2. 索引文件检查 ──
     print("\n── 2. 索引文件 ──")
-    from agent_config.skills.context_transformation.vectorizer import INDEX_PATH, META_PATH, REPO_DIR
+    from skills.context_transformation.vectorizer import INDEX_PATH, META_PATH, REPO_DIR
 
     print(f"  项目根目录: {REPO_DIR}")
     check("index.faiss 存在", os.path.exists(INDEX_PATH), INDEX_PATH)
@@ -68,7 +71,7 @@ def main():
     # ── 3. FAISS 索引加载 ──
     print("\n── 3. FAISS 索引加载 ──")
     try:
-        from agent_config.skills.context_transformation.vectorizer import FAISSIndexManager
+        from skills.context_transformation.vectorizer import FAISSIndexManager
         mgr = FAISSIndexManager()
         loaded = mgr.load()
         check("FAISS 索引加载", loaded)
@@ -83,7 +86,7 @@ def main():
     # ── 4. chunk_meta 解析 ──
     print("\n── 4. chunk_meta 解析 ──")
     try:
-        from agent_config.skills.context_transformation.vectorizer import load_chunk_meta
+        from skills.context_transformation.vectorizer import load_chunk_meta
         meta = load_chunk_meta()
         chunks = meta.get("chunks", [])
         files = meta.get("file_index", {})
@@ -99,7 +102,7 @@ def main():
     # ── 5. Embedding 模型加载 ──
     print("\n── 5. Embedding 模型 (BAAI/bge-small-zh-v1.5) ──")
     try:
-        from agent_config.skills.context_transformation.vectorizer import EmbeddingModel
+        from skills.context_transformation.vectorizer import EmbeddingModel
         embedder = EmbeddingModel()
         test_vec = embedder.encode(["测试"], is_query=True)
         check("模型加载并推理成功", test_vec.shape[0] == 1, f"shape={test_vec.shape}")
@@ -110,7 +113,7 @@ def main():
     # ── 6. BM25 检索器 ──
     print("\n── 6. BM25 检索器 ──")
     try:
-        from agent_config.skills.knowledge_retrieval.hybrid_search import BM25Retriever
+        from skills.knowledge_retrieval.hybrid_search import BM25Retriever
         bm25 = BM25Retriever()
         results = bm25.search("数据导出", top_k=3)
         check("BM25 检索", len(results) > 0, f"命中 {len(results)} 条")
@@ -121,7 +124,7 @@ def main():
     # ── 7. 向量检索器 ──
     print("\n── 7. 向量检索器 ──")
     try:
-        from agent_config.skills.knowledge_retrieval.hybrid_search import VectorRetriever
+        from skills.knowledge_retrieval.hybrid_search import VectorRetriever
         vr = VectorRetriever()
         check("VectorRetriever.ready", vr.ready)
         results = vr.search("数据导出", top_k=3)
@@ -133,7 +136,7 @@ def main():
     # ── 8. 混合检索 (完整链路) ──
     print("\n── 8. 混合检索 (完整链路) ──")
     try:
-        from agent_config.skills.knowledge_retrieval.hybrid_search import HybridSearcher, refresh_searcher
+        from skills.knowledge_retrieval.hybrid_search import HybridSearcher, refresh_searcher
         refresh_searcher()  # 确保全新初始化
         searcher = HybridSearcher()
         check("HybridSearcher.ready", searcher.ready)
@@ -152,7 +155,7 @@ def main():
     # ── 9. retrieve() 函数 ──
     print("\n── 9. retrieve() 端到端 ──")
     try:
-        from agent_config.skills.knowledge_retrieval.hybrid_search import retrieve, refresh_searcher
+        from skills.knowledge_retrieval.hybrid_search import retrieve, refresh_searcher
         refresh_searcher()
         result = retrieve("数据导出", top_k=3)
         hit_len = len(result.get("hit_text", ""))
