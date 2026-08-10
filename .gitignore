@@ -27,7 +27,6 @@ __pycache__/
 
 # FAISS vector index (auto-generated, large binary)
 backend/context/.faiss/
-agent_config/context/.faiss/
 
 # SQLite database (auto-generated)
 backend/data/
