@@ -21,11 +21,12 @@ def format_knowledge_retrieval_result(result: dict) -> str:
     if images:
         out.append("")
         out.append("### 命中图片（可选）")
+        out.append("使用 ![图片说明](图片路径) 的 markdown 格式展示图片，例如：")
         for img in images:
             alt = (img.get("alt") or "").strip()
             path = _normalize_image_path((img.get("path") or "").strip())
             source = (img.get("source") or "").strip()
-            out.append(f"- alt: {alt}")
-            out.append(f"  path: {path}")
+            # 直接给出 markdown 图片语法，LLM 可直接复制使用
+            out.append(f"- ![{alt}]({path})")
             out.append(f"  source: {source}")
     return "\n".join(out).strip()
