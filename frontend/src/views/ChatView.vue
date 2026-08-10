@@ -121,6 +121,8 @@ interface UIMessage {
   showRegenerate?: boolean
   error?: string
   created_at?: number
+  /** 节流后的 markdown 渲染 HTML，流式期间每 150ms 更新一次，防止图片闪动 */
+  _renderedHtml?: string
 }
 
 // ==================== 工具函数 ====================
@@ -142,6 +144,26 @@ marked.setOptions({ breaks: true, gfm: true, renderer: markedRenderer })
 function renderMarkdown(text: string): string {
   if (!text) return ''
   return marked.parse(text) as string
+}
+
+/** 流式渲染节流：防止图片等 DOM 元素频繁重建导致闪动 */
+const RENDER_THROTTLE_MS = 150
+const _renderTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
+
+function scheduleRender(msg: UIMessage) {
+  if (!msg.isStreaming) {
+    // 非流式（已完成/历史消息/出错）：立即渲染
+    msg._renderedHtml = renderMarkdown(msg.content)
+    return
+  }
+
+  // 流式期间：已有待执行的定时器则跳过，避免反复重置导致永不触发
+  if (_renderTimers.has(msg)) return
+
+  _renderTimers.set(msg, setTimeout(() => {
+    _renderTimers.delete(msg)
+    msg._renderedHtml = renderMarkdown(msg.content)
+  }, RENDER_THROTTLE_MS))
 }
 
 function cleanReasoning(text: string): string {
@@ -309,6 +331,7 @@ async function sendMessage() {
         assistantMsg.showThinking = false
       }
       assistantMsg.content += content
+      scheduleRender(assistantMsg)
       if (DEBUG_STREAM) {
         const preview = content.substring(0, 40).replace(/\n/g, '\\n')
         console.debug(`[Vue] onContent +="${preview}" total=${assistantMsg.content.length}`)
@@ -322,6 +345,7 @@ async function sendMessage() {
         console.debug(`[Vue] onReasoning +="${preview}" total=${assistantMsg.reasoning!.length}`)
       }
       if (userAtBottom.value) scrollToBottom()
+      scrollThinkingContentToBottom()
     },
     (type: string, result: string) => {
       if (!assistantMsg.tasks) assistantMsg.tasks = []
@@ -330,6 +354,8 @@ async function sendMessage() {
     },
     () => {
       assistantMsg.isStreaming = false
+      // 流式结束，立即渲染最终内容
+      scheduleRender(assistantMsg)
       if (DEBUG_STREAM) {
         console.debug(
           `[Vue] onDone | reasoning=${assistantMsg.reasoning?.length || 0} content=${assistantMsg.content.length} tasks=${assistantMsg.tasks?.length || 0}`,
@@ -344,6 +370,7 @@ async function sendMessage() {
       assistantMsg.isStreaming = false
       assistantMsg.showRegenerate = true
       assistantMsg.error = _error
+      scheduleRender(assistantMsg)
       isStreaming.value = false
       abortController = null
       if (DEBUG_STREAM) console.debug('[Vue] onError:', _error)
@@ -383,6 +410,7 @@ async function handleRegenerate(msg: UIMessage) {
         msg.showThinking = false
       }
       msg.content += content
+      scheduleRender(msg)
       if (DEBUG_STREAM) {
         const preview = content.substring(0, 40).replace(/\n/g, '\\n')
         console.debug(`[Vue] onContent(regenerate) +="${preview}" total=${msg.content.length}`)
@@ -396,6 +424,7 @@ async function handleRegenerate(msg: UIMessage) {
         console.debug(`[Vue] onReasoning(regenerate) +="${preview}" total=${msg.reasoning!.length}`)
       }
       if (userAtBottom.value) scrollToBottom()
+      scrollThinkingContentToBottom()
     },
     (type: string, result: string) => {
       if (!msg.tasks) msg.tasks = []
@@ -404,6 +433,8 @@ async function handleRegenerate(msg: UIMessage) {
     },
     () => {
       msg.isStreaming = false
+      // 流式结束，立即渲染最终内容
+      scheduleRender(msg)
       if (DEBUG_STREAM) {
         console.debug(
           `[Vue] onDone(regenerate) | reasoning=${msg.reasoning?.length || 0} content=${msg.content.length} tasks=${msg.tasks?.length || 0}`,
@@ -418,6 +449,7 @@ async function handleRegenerate(msg: UIMessage) {
       msg.isStreaming = false
       msg.showRegenerate = true
       msg.error = _error
+      scheduleRender(msg)
       isStreaming.value = false
       abortController = null
       if (DEBUG_STREAM) console.debug('[Vue] onError(regenerate):', _error)
@@ -584,6 +616,18 @@ async function scrollToBottom() {
   if (messageArea.value) {
     messageArea.value.scrollTop = messageArea.value.scrollHeight
   }
+}
+
+/** 将当前流式消息的思考过程内容区滚动到底部 */
+function scrollThinkingContentToBottom() {
+  nextTick(() => {
+    // 找到最后一个 assistant 消息中的 .thinking-content（即当前正在流式的消息）
+    const contents = messageArea.value?.querySelectorAll('.thinking-content')
+    if (contents && contents.length > 0) {
+      const el = contents[contents.length - 1] as HTMLElement
+      el.scrollTop = el.scrollHeight
+    }
+  })
 }
 
 function handleMessageScroll() {
@@ -896,16 +940,11 @@ onBeforeUnmount(() => {
                   class="thinking-divider"
                 ></div>
 
-                <!-- 内容（流式时纯文本，完成后 markdown 渲染） -->
+                <!-- 内容（实时 markdown 渲染，流式期间节流防闪动） -->
                 <div
-                  v-if="msg.content && msg.isStreaming"
+                  v-if="msg.content"
                   class="msg-content"
-                  @click="handleMessageContentClick"
-                >{{ msg.content }}</div>
-                <div
-                  v-else-if="msg.content"
-                  class="msg-content"
-                  v-html="renderMarkdown(msg.content)"
+                  v-html="msg._renderedHtml ?? renderMarkdown(msg.content)"
                   @click="handleMessageContentClick"
                 ></div>
 
@@ -1522,7 +1561,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--color-text-tertiary);
   line-height: 20px;
-  max-height: 200px;
+  max-height: 100px;
   overflow-y: auto;
   border-top: 1px solid var(--color-border-light);
 }
