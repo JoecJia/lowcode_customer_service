@@ -156,8 +156,13 @@ class MarkdownChunker:
 
 class EmbeddingModel:
     def __init__(self, model_name: str = EMBEDDING_MODEL_NAME):
+        import os as _os
+        # 强制离线模式，避免服务器无外网时 SentenceTransformer 尝试联网检查 PEFT adapter 配置
+        _os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        _os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        _os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
         from sentence_transformers import SentenceTransformer
-        self._model = SentenceTransformer(model_name)
+        self._model = SentenceTransformer(model_name, local_files_only=True)
 
     def encode(self, texts: list[str], is_query: bool = False) -> np.ndarray:
         if is_query:
