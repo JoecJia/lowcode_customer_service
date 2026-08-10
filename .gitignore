@@ -38,6 +38,9 @@ documents_all/
 # Large docx conversion cache
 docs/convert_docs/
 
+# Large model cache (too big for GitHub, sync separately)
+agent_config/data/
+
 # IDE / Config
 .trae/
 venv/
