@@ -21,7 +21,7 @@ cd smart-customer-service
 
 ```bash
 cat > .env << 'EOF'
-ARK_API_KEY=your-ark-api-key
+ARK_API_KEY=your-api-key-here
 JWT_SECRET=change-me-in-production
 HF_ENDPOINT=https://hf-mirror.com
 EOF

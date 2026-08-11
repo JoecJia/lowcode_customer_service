@@ -22,7 +22,7 @@ PYTHON=$(command -v python3 || command -v python)
 if [ ! -f ".env" ]; then
     echo "[WARN] .env not found. Creating default .env..."
     cat > .env << 'EOF'
-ARK_API_KEY=your-ark-api-key
+ARK_API_KEY=your-api-key-here
 JWT_SECRET=change-me-in-production
 HF_ENDPOINT=https://hf-mirror.com
 EOF
