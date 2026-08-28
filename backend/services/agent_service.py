@@ -18,10 +18,10 @@ MIN_RETAIN_ROUNDS = 10
 
 # ── Task JSON 流式过滤正则 ──
 _RAW_TASK_JSON_RE = re.compile(
-    r'\[\s*\{\s*"(?:name|type|task_type)"\s*:\s*"[^"]*"\s*,\s*"query"\s*:\s*"(?:[^"\\]|\\.)*?"'
-    r'(?:\s*,\s*"(?:top_k|k)"\s*:\s*\d+)?\s*\}'
-    r'(?:\s*,\s*\{\s*"(?:name|type|task_type)"\s*:\s*"[^"]*"\s*,\s*"query"\s*:\s*"(?:[^"\\]|\\.)*?"'
-    r'(?:\s*,\s*"(?:top_k|k)"\s*:\s*\d+)?\s*\})*'
+    r'\[\s*\{\s*"(?:name|type|task_type)"\s*:\s*"[^"]*"'
+    r'(?:\s*,\s*"(?:query|arguments|top_k|k)"\s*:\s*[^,}]+)*\s*\}'
+    r'(?:\s*,\s*\{\s*"(?:name|type|task_type)"\s*:\s*"[^"]*"'
+    r'(?:\s*,\s*"(?:query|arguments|top_k|k)"\s*:\s*[^,}]+)*\s*\})*'
     r'\s*\]',
 )
 _START_RAW_JSON = re.compile(r'\[\s*\{\s*"(?:name|type|task_type)"\s*:\s*"')
@@ -433,7 +433,10 @@ async def agent_loop_stream(
                 yield "event: done\ndata: {}\n\n"
                 return
 
-            fingerprint = f"{task.task_type}|{task.query}|{task.top_k}"
+            fingerprint = (
+                f"{task.task_type}|{task.query}|{task.top_k}|"
+                f"{json.dumps(task.arguments or {}, ensure_ascii=False)}"
+            )
             last_task_fingerprints.append(fingerprint)
             if len(last_task_fingerprints) >= 4 and len(set(last_task_fingerprints[-3:])) == 1:
                 yield f"event: warning\ndata: {json.dumps({'content': 'Repeated task detected, stopping.'})}\n\n"
@@ -444,7 +447,7 @@ async def agent_loop_stream(
                 yield "event: done\ndata: {}\n\n"
                 return
 
-            result_text = dispatch_skill(REPO_DIR, task)
+            result_text = await dispatch_skill(REPO_DIR, task)
 
             yield f"event: task\ndata: {json.dumps({'type': task.task_type, 'status': 'executed', 'result': result_text})}\n\n"
 

@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/joec/Joec_code/P7_lowcode_customer_service"
+      ],
+      "env": {}
+    },
+    "remote-http": {
+      "url": "https://mcp.example.com/postgres",
+      "headers": { "Authorization": "Bearer xxx" }
+    },
+    "remote-sse": {
+      "type": "sse",
+      "url": "https://mcp.example.com/sse",
+      "headers": { "Authorization": "Bearer xxx" }
+    }
+  }
+}

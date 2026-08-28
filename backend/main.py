@@ -1,5 +1,6 @@
 import os
 import sys
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,8 +13,18 @@ from routers.chat import router as chat_router
 from routers.auth import router as auth_router
 from routers.feedback import router as feedback_router
 from routers.admin import router as admin_router
+from services.mcp_service import mcp_manager
 
-app = FastAPI(title="低代码智能客服")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动 MCP Client：连接失败自动降级，不影响其他能力
+    await mcp_manager.start()
+    yield
+    await mcp_manager.close()
+
+
+app = FastAPI(title="低代码智能客服", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

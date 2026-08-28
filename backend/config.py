@@ -17,3 +17,12 @@ SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "1800"))
 DB_PATH = os.environ.get("DB_PATH", os.path.join(REPO_DIR, "data", "app.db"))
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
+
+# ── MCP 配置 ──
+# mcp_servers.json 位于 backend/ 目录下
+MCP_SERVERS_PATH = os.environ.get(
+    "MCP_SERVERS_PATH",
+    os.path.join(REPO_DIR, "mcp_servers.json"),
+)
+# 单次 MCP 工具调用超时（秒）
+MCP_CALL_TIMEOUT_SECONDS = int(os.environ.get("MCP_CALL_TIMEOUT_SECONDS", "60"))

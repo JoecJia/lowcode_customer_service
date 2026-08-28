@@ -33,6 +33,7 @@ class Task:
     raw: str
     query: str | None = None
     top_k: int | None = None
+    arguments: dict | None = None
 
 
 def read_text_file(path: str) -> str:
@@ -113,7 +114,17 @@ def parse_tasks(text: str) -> list[Task]:
                 except ValueError:
                     top_k = None
 
-            tasks.append(Task(task_type=task_type, raw=raw, query=query, top_k=top_k))
+            arguments = None
+            ma = re.search(r"<arguments>\s*([\s\S]*?)\s*</arguments>", raw, flags=re.IGNORECASE)
+            if ma:
+                try:
+                    parsed_args = json.loads(ma.group(1).strip())
+                    if isinstance(parsed_args, dict):
+                        arguments = parsed_args
+                except Exception:
+                    arguments = None
+
+            tasks.append(Task(task_type=task_type, raw=raw, query=query, top_k=top_k, arguments=arguments))
             continue
 
         inner_match = re.search(r"<task>\s*([\s\S]*?)\s*</task>", raw, flags=re.IGNORECASE)
@@ -148,7 +159,10 @@ def parse_tasks(text: str) -> list[Task]:
                         top_k = int(top_k) if top_k is not None else None
                     except Exception:
                         top_k = None
-                    tasks.append(Task(task_type=name, raw=raw, query=query, top_k=top_k))
+                    arguments = item.get("arguments")
+                    if not isinstance(arguments, dict):
+                        arguments = None
+                    tasks.append(Task(task_type=name, raw=raw, query=query, top_k=top_k, arguments=arguments))
             continue
 
         task_name = None
