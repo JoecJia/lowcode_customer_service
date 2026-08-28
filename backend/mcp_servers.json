@@ -1,22 +1,17 @@
 {
   "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/Users/joec/Joec_code/P7_lowcode_customer_service"
-      ],
-      "env": {}
-    },
-    "remote-http": {
-      "url": "https://mcp.example.com/postgres",
-      "headers": { "Authorization": "Bearer xxx" }
-    },
-    "remote-sse": {
-      "type": "sse",
-      "url": "https://mcp.example.com/sse",
-      "headers": { "Authorization": "Bearer xxx" }
+    "office-mcp": {
+      "url": "http://m.oa.chaoxing.com/api/forms/config/mcp",
+      "type": "http",
+      "headers": {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "http://m.oa.chaoxing.com/",
+        "Origin": "http://m.oa.chaoxing.com"
+      },
+      "token": {
+        "kind": "chaoxing-mcp"
+      }
     }
   }
 }

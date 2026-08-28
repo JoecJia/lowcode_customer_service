@@ -76,6 +76,7 @@ class MCPClientManager:
     def __init__(self) -> None:
         self._connections: dict[str, _ServerConnection] = {}
         self._tools: dict[str, MCPTool] = {}
+        self._server_cfgs: dict[str, dict] = {}
         self._started = False
 
     # ── 生命周期 ──
@@ -96,6 +97,7 @@ class MCPClientManager:
             return
 
         for name, cfg in servers.items():
+            self._server_cfgs[name] = cfg
             await self._connect_server(name, cfg)
 
     async def close(self) -> None:
@@ -129,7 +131,8 @@ class MCPClientManager:
             return
         try:
             conn = _ServerConnection(server_name=name)
-            transport_ctx = self._build_transport(cfg)
+            headers = await self._with_auth_headers(cfg, cfg.get("headers"))
+            transport_ctx = self._build_transport(cfg, headers)
             if transport_ctx is None:
                 return
             read, write = await conn.stack.enter_async_context(transport_ctx)
@@ -162,8 +165,36 @@ class MCPClientManager:
                 pass
             print(f"[mcp] 连接 server '{name}' 失败（已降级跳过）: {e}", file=sys.stderr)
 
+    async def _reconnect_server(self, name: str) -> None:
+        """断开并重连指定 Server（用于 token 过期后刷新连接）。"""
+        old = self._connections.pop(name, None)
+        if old is not None:
+            try:
+                await old.stack.aclose()
+            except Exception:
+                pass
+        self._tools = {k: v for k, v in self._tools.items() if v.server != name}
+        cfg = self._server_cfgs.get(name)
+        if cfg:
+            await self._connect_server(name, cfg)
+
+    async def _with_auth_headers(self, cfg: dict, base_headers: Optional[dict]) -> Optional[dict]:
+        """若配置了 token 鉴权，注入 Authorization: Bearer <token>。"""
+        token_cfg = cfg.get("token")
+        if not isinstance(token_cfg, dict):
+            return base_headers
+        kind = (token_cfg.get("kind") or "").strip().lower()
+        if kind == "chaoxing-mcp":
+            import services.mcp_token_service as token_service
+
+            token = await token_service.get_bearer_token()
+            headers = dict(base_headers or {})
+            headers["Authorization"] = f"Bearer {token}"
+            return headers
+        return base_headers
+
     @staticmethod
-    def _build_transport(cfg: dict):
+    def _build_transport(cfg: dict, headers: Optional[dict] = None):
         """依据配置 type/url/command 判定传输方式，返回 async 上下文管理器。
 
         - type == "sse" → SSE
@@ -171,8 +202,9 @@ class MCPClientManager:
         - 有 command → stdio
         """
         t = (cfg.get("type") or "").strip().lower()
-        headers = cfg.get("headers")
-        headers = headers if isinstance(headers, dict) else None
+        if headers is None:
+            headers = cfg.get("headers")
+            headers = headers if isinstance(headers, dict) else None
 
         if t == "sse":
             url = cfg.get("url")
@@ -205,10 +237,22 @@ class MCPClientManager:
         return self._tools.get(name)
 
     async def call_tool(self, name: str, arguments: dict) -> str:
-        """调用 MCP 工具，返回序列化文本结果。带超时保护。"""
+        """调用 MCP 工具，返回序列化文本结果。带超时保护。
+
+        token 鉴权的 server 在调用前校验 token 有效期，过期则自动重连刷新。
+        """
         tool = self._tools.get(name)
         if tool is None:
             return f"MCP tool not found: {name}"
+
+        if self._needs_token_refresh(tool.server):
+            if DEBUG:
+                print(f"[mcp] server '{tool.server}' token 过期，重连刷新", file=sys.stderr)
+            await self._reconnect_server(tool.server)
+            tool = self._tools.get(name)
+            if tool is None:
+                return f"MCP tool unavailable after reconnect: {name}"
+
         conn = self._connections.get(tool.server)
         if conn is None or conn.session is None:
             return f"MCP server not connected: {tool.server}"
@@ -224,6 +268,19 @@ class MCPClientManager:
             return f"MCP tool call failed: {name} ({e})"
 
         return self._format_call_result(name, result)
+
+    def _needs_token_refresh(self, server_name: str) -> bool:
+        """判断 server 是否配置了 token 鉴权且当前 token 已过期。"""
+        cfg = self._server_cfgs.get(server_name) or {}
+        token_cfg = cfg.get("token")
+        if not isinstance(token_cfg, dict):
+            return False
+        kind = (token_cfg.get("kind") or "").strip().lower()
+        if kind == "chaoxing-mcp":
+            import services.mcp_token_service as token_service
+
+            return not token_service.token_is_fresh()
+        return False
 
     @staticmethod
     def _format_call_result(name: str, result) -> str:

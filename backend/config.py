@@ -26,3 +26,11 @@ MCP_SERVERS_PATH = os.environ.get(
 )
 # 单次 MCP 工具调用超时（秒）
 MCP_CALL_TIMEOUT_SECONDS = int(os.environ.get("MCP_CALL_TIMEOUT_SECONDS", "60"))
+
+# ── Chaoxing MCP token（凭据来自 .env，已 gitignore）──
+CHAOXING_MCP_TOKEN_URL = os.environ.get("CHAOXING_MCP_TOKEN_URL", "")
+CHAOXING_MCP_TYPE = os.environ.get("CHAOXING_MCP_TYPE", "forms_config_mcp")
+CHAOXING_MCP_FID = os.environ.get("CHAOXING_MCP_FID", "")
+CHAOXING_MCP_UID = os.environ.get("CHAOXING_MCP_UID", "")
+CHAOXING_MCP_SIGN = os.environ.get("CHAOXING_MCP_SIGN", "")
+CHAOXING_MCP_KEY = os.environ.get("CHAOXING_MCP_KEY", "")
