@@ -105,7 +105,6 @@ Agent 定义在 `agent_config/agent.md`，工作流如下：
 | `clarifying_questions` | 信息不足时智能反问 |
 | `context_transformation` | 文件转化、图片识别与索引维护 |
 | `temporary_context_management` | 未解决问题记录 |
-| `git_sync` | 项目远程同步 |
 
 ### 知识库
 

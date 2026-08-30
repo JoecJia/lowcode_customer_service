@@ -53,7 +53,7 @@ def cmd_rebuild() -> int:
 
     index_mgr.save()
     save_chunk_meta(meta)
-    from skills.knowledge_retrieval.hybrid_search import refresh_searcher
+    from agent_config.skills.knowledge_retrieval.hybrid_search import refresh_searcher
     refresh_searcher()
     print(f"Done ({elapsed:.1f}s): {len(meta['chunks'])} chunks across {len(meta['file_index'])} files")
     return 0

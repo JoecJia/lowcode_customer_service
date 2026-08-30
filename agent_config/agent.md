@@ -16,7 +16,7 @@
      - `产品功能案例`：询问某功能的应用案例、适用场景或实现逻辑（调用 `usage_scenarios`）。
      - `场景方案建议`：描述了业务痛点或需求，寻求整体产品组合方案（调用 `scenario_solutions`）。
      - `系统搭建指南`：请求搭建特定业务系统（如进销存、OA）的详细步骤（调用 `build_business_system`）。
-     - `系统维护/同步`：涉及 Git 同步、文档更新、GitHub 配置等（调用 `git_sync`）。
+     - `系统维护/同步`：涉及 Git 同步、文档更新、GitHub 配置等（直接执行原生 git 命令，pull 使用 `--rebase --autostash`）。
      - `Context 管理`：涉及文件转化、图片识别或索引维护（调用 `context_transformation`）。
 
 3. **任务规划 (Planning)**：
@@ -35,7 +35,7 @@
        - **日志记录**：**必须调用** `temporary_context_management` 技能执行 `record` 操作。将任务日志（包含大模型回答、用户回答、步骤运行详情）作为 `record_content` 写入当日对应的 `temp_notes_YYYYMMDD.md` 文件中。
        - **状态输出**：输出当前任务执行状态（失败/终止）及后续执行建议。告知用户：“任务因异常已暂时终止，您可以根据建议继续提问，我将延续之前的上下文为您服务。”
 5. **兜底逻辑 (Fallback)**：
-   - 无法分辨分类时，调用 `temporary_context_management` 记录并引导用户填写 [反馈表](http://16q.cn/PUSjHK)。
+   - 无法分辨分类时，调用 `feedback_form_link` 生成带对话总结预填的反馈表填写链接并引导用户填写（该 Skill 会通过 office-mcp 获取反馈表链接并用 precast 参数预填对话总结；若调用失败则降级使用 [固定反馈表链接](http://16q.cn/PUSjHK)）。
 6. **最终答复**：
    - 整合结果，提供专业答复。
    - **内容结构化要求**：生成最终答复时，必须根据内容逻辑划分严格的层级结构，正确使用以下 markdown 排版元素：
@@ -59,10 +59,10 @@
 - [信息补充与反问](skills/clarifying_questions.md)：当用户信息不足时，通过反问获取必要信息。
 - [Context 转化与自动化索引](skills/context_transformation.md)：处理上传文件、图片压缩、图片识别及索引维护。
 - [临时 Context 管理](skills/temporary_context_management.md)：记录无法处理的问题或灵感。
-- [项目同步 (Git Sync)](skills/git_sync/git_sync.md)：管理代码和文档的远程同步，支持 Windows/macOS 一键脚本。
+- [生成反馈表填写链接](skills/feedback_form_link.md)：引导用户填写反馈表时，通过 office-mcp 获取链接并以 precast 参数预填对话总结。
 
 ## 注意事项
-- **严禁删除**：在更新过程中，绝对禁止删除或修改 `git_sync`, `temporary_context_management`, `context_transformation`, `knowledge_retrieval` 的核心逻辑。
+- **严禁删除**：在更新过程中，绝对禁止删除或修改 `temporary_context_management`, `context_transformation`, `knowledge_retrieval` 的核心逻辑。
 - **协同作业**：一个复杂的咨询可能需要先调用 `knowledge_retrieval` 获取背景，再调用 `scenario_solutions` 生成方案。
 
 ## 项目迭代建议
@@ -77,6 +77,6 @@
 - **每两周或每月**：做一次信息架构整理（合并重复知识、补索引、清理过期内容），并回看回归集的变化趋势。
 
 ### 工程化
-- **同步流程标准化**：统一走 `agent_config/skills/git_sync/sync_project.ps1`（Windows）/ `agent_config/skills/git_sync/sync_project.sh`（macOS）的 `pull/push/sync`，减少手工遗漏。
+- **同步流程标准化**：统一走原生 git 命令，pull 使用 `git pull --rebase --autostash origin main`（自动暂存未提交改动再 rebase），push 前先 pull 再 push，提交时按文件精确 `git add`，减少手工遗漏。
 - **知识导入自动化**：将 docx→md 转化与索引维护作为固定动作，降低知识散落风险。
 - **把“质量”显性化**：至少固定看 3 个数：意图分类准确性（或需要改口次数）、平均追问轮数、无法处理/需记录的比例。

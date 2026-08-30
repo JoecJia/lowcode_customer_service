@@ -41,10 +41,6 @@
   - 路径: `skills/`
   - 索引内容:
     - [信息补充与反问](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/agent_config/skills/clarifying_questions.md): 用户信息不足时的反问机制，包含上下文总结、缺口识别及精准反问。
-- **项目同步 (Git Sync)**
-  - 路径: `skills/git_sync/`
-  - 索引内容:
-    - [项目同步](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/agent_config/skills/git_sync/git_sync.md): 包含上传改动、下载文档、同步项目、GitHub 配置。
 
 ## 检索说明
 1. 检索时先匹配“索引内容”中的关键词。

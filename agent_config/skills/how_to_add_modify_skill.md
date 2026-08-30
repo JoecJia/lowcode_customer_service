@@ -117,10 +117,6 @@ skills/
 │   ├── vectorizer.py
 │   ├── build_initial_index.py
 │   └── update_index.py
-├── git_sync/                         # 复杂 Skill（含脚本）
-│   ├── git_sync.md
-│   ├── sync_project.sh
-│   └── sync_project.ps1
 └── knowledge_retrieval/              # 复杂 Skill（含自定义代码分支）
     ├── knowledge_retrieval.md
     └── hybrid_search.py

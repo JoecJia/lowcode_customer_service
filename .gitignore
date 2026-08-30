@@ -31,8 +31,6 @@ backend/context/.faiss/
 # SQLite database (auto-generated)
 backend/data/
 
-# Local sync scripts (optional to ignore)
-# sync_project.ps1
 documents_all/
 
 # Large docx conversion cache

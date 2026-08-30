@@ -11,9 +11,9 @@ SKILL_REGISTRY = {
     "usage_scenarios": "../agent_config/skills/usage_scenarios.md",
     "scenario_solutions": "../agent_config/skills/scenario_solutions.md",
     "build_business_system": "../agent_config/skills/build_business_system.md",
-    "git_sync": "../agent_config/skills/git_sync/git_sync.md",
     "context_transformation": "../agent_config/skills/context_transformation/context_transformation.md",
     "temporary_context_management": "../agent_config/skills/temporary_context_management.md",
+    "feedback_form_link": "../agent_config/skills/feedback_form_link.md",
 }
 
 TOOL_PROTOCOL = (
@@ -26,9 +26,9 @@ TOOL_PROTOCOL = (
     "  - usage_scenarios: 产品功能使用案例\n"
     "  - scenario_solutions: 场景方案建议\n"
     "  - build_business_system: 搭建业务系统指南\n"
-    "  - git_sync: 项目同步\n"
     "  - context_transformation: Context 转化与索引维护\n"
     "  - temporary_context_management: 临时内容记录\n"
+    "  - feedback_form_link: 生成问题反馈表填写链接（自动预填对话总结）\n"
     "\n收到 <task> 后，我会加载对应 Skill 文件的完整内容并注入上下文。"
     "你收到 <task_result> 后，必须严格按 Skill 文件中定义的执行步骤完成任务。"
     "如果你已经有足够信息可以直接回答用户，则无需输出 <task>。"
