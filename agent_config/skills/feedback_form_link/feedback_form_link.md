@@ -8,6 +8,10 @@
 - 用户主动要求「提交反馈 / 填写反馈表 / 反馈问题」时。
 - 对话陷入死循环需终止并引导用户反馈时。
 
+## 目录结构
+- `feedback_form_link.md`：本技能描述文件。
+- `build_link.py`：precast URL 编码与链接拼接脚本（供 `feedback_form_link_encode` 调度调用，也可命令行单独使用）。
+
 ## 前置信息（问题反馈表固定参数）
 - fid：`97253`
 - 表单 ID（formId）：`154231`（用户侧习惯称之为「审批id」）
@@ -162,12 +166,18 @@
 - **question_type（问题类型）**：从接口返回的 options 中选取最匹配的类型（产品bug/产品需求/产品功能不知道如何使用/判断需求能否实现/业务系统搭建指导/预约、中职项目对接（已沟通）/其他）。
 - **question_description（问题描述）**：按 4.2 规则生成填充后的完整 HTML。
 
-### 第 5 步：拼接完整链接
-1. 将 precast JSON 做 URL 编码（UTF-8，与普通 query 参数编码一致）。
-2. 拼接规则：`<第 2 步获取的基础链接>&precast=<URL编码后的JSON>`。
-   - office-mcp 返回的基础链接已包含 `?id=...&fidEnc=...&enc=...` 查询参数，因此用 `&` 连接。
-   - 若基础链接无任何查询参数，则用 `?precast=...`。
-3. precast 参数直接拼在链接末尾，**不要改动基础链接中的任何已有参数**。
+### 第 5 步：拼接完整链接（脚本编码，禁止手工拼接）
+**precast 的 URL 编码与链接拼接由脚本统一完成，严禁大模型自行编码或手工拼接。** 通过 `<task>` 调用 `feedback_form_link_encode` 技能，传入基础链接与 precast JSON：
+
+```
+<task><type>feedback_form_link_encode</type><arguments>{"base_url": "<第 2 步获取的基础链接>", "precast": {"data": [...]}}</arguments></task>
+```
+
+- `base_url`：第 2 步 office-mcp 返回的 apply 页面基础链接，原样传入。
+- `precast`：第 4 步生成的 precast JSON 对象，原样传入。
+- 脚本会按规则自动处理分隔符（基础链接含查询参数用 `&`，否则用 `?`），且不改动基础链接中的任何已有参数。
+
+`feedback_form_link_encode` 返回结果中包含拼接好的完整链接，直接使用该结果向用户展示即可。
 
 ### 第 6 步：输出给用户
 向用户展示：
@@ -189,5 +199,5 @@
 
 ## 注意事项与降级策略
 - 若 office-mcp 调用失败（获取链接或字段结构失败）：降级为直接引导用户填写反馈表固定链接 `http://16q.cn/PUSjHK`，不拼接 precast。
-- 生成链接后如需校验，可检查 `precast` 参数是否完整且已 URL 编码（无裸 `{`、`"`、中文等未编码字符）。
+- precast 的 URL 编码由 `build_link.py` 脚本完成（UTF-8，编码所有保留字符）；若 `feedback_form_link_encode` 调用失败，同样降级为固定链接。
 - 生成的链接仅用于引导用户填写，不要公开泄露。

@@ -36256,146 +36256,6 @@
       "images": []
     },
     {
-      "chunk_id": 3504,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator)",
-      "content": "# Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator)",
-      "images": []
-    },
-    {
-      "chunk_id": 3505,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 目标",
-      "content": " Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator)\n\n## 目标\n当需要引导用户填写「问题反馈表」时，将最近的对话内容总结后，通过 office-mcp 获取反馈表的填写页面链接，并以 precast 参数把总结内容预填到表单字段中，最终生成一个带预填数据的完整链接展示给用户。用户点击链接进入填写页后，只需补充少量信息即可提交，无需重复描述问题。",
-      "images": []
-    },
-    {
-      "chunk_id": 3506,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 触发条件",
-      "content": "预填数据的完整链接展示给用户。用户点击链接进入填写页后，只需补充少量信息即可提交，无需重复描述问题。\n\n## 触发条件\n- 无法识别用户意图、无法回答用户问题，需要引导用户提交反馈时（兜底场景）。\n- 用户主动要求「提交反馈 / 填写反馈表 / 反馈问题」时。\n- 对话陷入死循环需终止并引导用户反馈时。",
-      "images": []
-    },
-    {
-      "chunk_id": 3507,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 前置信息（问题反馈表固定参数）",
-      "content": "户主动要求「提交反馈 / 填写反馈表 / 反馈问题」时。\n- 对话陷入死循环需终止并引导用户反馈时。\n\n## 前置信息（问题反馈表固定参数）\n- fid：`97253`\n- 表单 ID（formId）：`154231`（用户侧习惯称之为「审批id」）\n- 表单类型（formType）：`0`（已验证：该反馈表以 formType=0 查询可返回字段配置与填写链接，formType=1/2 均查不到）\n- 反馈表名称：办公产品问题反馈表\n- 字段 alias（已确认，precast 中必须使用这些 alias）：\n  | 字段 | alias | compt |\n  | --- | --- | --- |\n  | 产品模块 | `products` | `checklist` |\n  | FID | `fid` | `editinput` |\n  | 问题类型 | `question_type` | `checklist` |\n  | 问题描述 | `question_description` | `richtext` |",
-      "images": []
-    },
-    {
-      "chunk_id": 3508,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤",
-      "content": "|\n  | 问题描述 | `question_description` | `richtext` |\n\n## 执行步骤",
-      "images": []
-    },
-    {
-      "chunk_id": 3509,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 1 步：总结最近对话",
-      "content": "述 | `question_description` | `richtext` |\n\n## 执行步骤\n\n### 第 1 步：总结最近对话\n将本次会话中的关键信息整理为结构化总结，作为表单预填的数据来源。总结至少覆盖：\n- **问题描述**：用户遇到的问题现象、操作路径、复现步骤、期望结果。\n- **产品模块**：表单 / 审批 / 信息查询 / 图表引擎 / 数据工厂 / 聚合表 / 空间预约 / 座位预约 / 考勤管理 / 报表引擎 / 报告引擎 / 学生评价系统 / 业务流引擎 / 问卷表单 / 公文流转（按对话实际涉及模块判断）。\n- **问题类型**：产品bug / 产品需求 / 产品功能不知道如何使用 / 判断需求能否实现 / 业务系统搭建指导 / 预约、中职项目对接（已沟通）/ 其他。\n- **单位 fid、应用名称、表单 id、审批 id**：对话中如出现则提取。\n- **测试账号**：若问题与具体用户相关，记录登录方式 / 账号 / 密码，供复现问题使用。",
-      "images": []
-    },
-    {
-      "chunk_id": 3510,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 2 步：获取反馈表填写页面链接",
-      "content": "取。\n- **测试账号**：若问题与具体用户相关，记录登录方式 / 账号 / 密码，供复现问题使用。\n\n### 第 2 步：获取反馈表填写页面链接\n调用 office-mcp 的「获取应用链接」能力（`office_form_apply_page_url`）：\n\n```\n<task><type>office-mcp.office_form_apply_page_url</type><arguments>{\"formType\":0,\"formId\":154231,\"fid\":97253}</arguments></task>\n```\n\n记录返回的 apply 页面基础链接（形如 `http://office.chaoxing.com/front/web/apps/forms/fore/apply?id=154231&fidEnc=...&enc=...`）。",
-      "images": []
-    },
-    {
-      "chunk_id": 3511,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 3 步：获取反馈表字段结构",
-      "content": "s/forms/fore/apply?id=154231&fidEnc=...&enc=...`）。\n\n### 第 3 步：获取反馈表字段结构\n调用 office-mcp 的「获取应用字段结构」能力（`office_form_compts_info`）：\n\n```\n<task><type>office-mcp.office_form_compts_info</type><arguments>{\"formType\":0,\"formId\":154231,\"fid\":97253}</arguments></task>\n```\n\n逐项记录接口返回字段的 `alias`（字段别名）、`compt`（组件类型）、`label`（字段名）、`options`（选项，选择类字段才有）。\n**必须使用接口返回的真实 alias 与 compt，严禁臆造或套用其他表单的 alias。**\n\n> 说明：当前接口对 154231 返回 产品模块(alias=`products`)/FID(alias=`fid`)/问题类型(alias=`question_type`) 三个字段；「问题描述」为富文本字段，接口不返回，其 alias 固定为 `question_description`（见 4.4）。",
-      "images": []
-    },
-    {
-      "chunk_id": 3512,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数",
-      "content": "段，接口不返回，其 alias 固定为 `question_description`（见 4.4）。\n\n### 第 4 步：生成 precast 参数\n按以下 JSON 结构组织（`data` 为数组，每项对应一个要预填的字段）：\n\n```json\n{\n  \"data\": [\n    {\"alias\": \"<字段alias>\", \"compt\": \"<组件类型>\", \"val\": [<值结构>]},\n    {\"alias\": \"<字段alias>\", \"compt\": \"richtext\", \"val\": [\"<HTML>\"], \"content\": \"<HTML>\"}\n  ]\n}\n```",
-      "images": []
-    },
-    {
-      "chunk_id": 3513,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.1 组件类型（compt）与值结构（val）对照表",
-      "content": " \"val\": [\"<HTML>\"], \"content\": \"<HTML>\"}\n  ]\n}\n```\n\n#### 4.1 组件类型（compt）与值结构（val）对照表\n| compt | val 结构 | 示例 |\n| --- | --- | --- |\n| `editinput`（单行输入） | `[\"文本\"]` | `[\"97253\"]` |\n| `editTextarea` / `edittextarea`（多行输入） | `[\"文本\"]` | `[\"多行内容\"]` |\n| `numberInput` / `numberinput`（数字） | `[\"数字字符串\"]` | `[\"123456\"]` |\n| `dateInput` / `dateinput`（日期时间） | `[\"yyyy-MM-dd HH:mm\"]` | `[\"2026-08-30 10:00\"]` |\n| `radiobutton`（单选） | `[{\"val\":\"选项\"}]` | `[{\"val\":\"选项1\"}]` |\n| `checklist`（多选） | `[{\"val\":\"选项1\"},{\"val\":\"选项2\"}]` | 多选可含多个元素 |\n| `selectbox`（下拉单选） | `[{\"val\":\"选项\"}]` | `[{\"val\":\"选项2\"}]` |\n| `selectmultibox`（下拉多选） | `[{\"val\":\"选项1\"},{\"val\":\"选项2\"}]` | |\n| `contact`（联系人） | `[[{\"puid\":数字,\"uname\":\"姓名\"}]]` | 无法确认具体用户时省略 |\n| `belonger`（所属人） | `[[{\"puid\":数字,\"uname\":\"姓名\"}]]` | 无法确认具体用户时省略 |\n| `imagebox`（图片） | `[{文件对象}]` | 无法提供文件时省略 |\n| `fileupload`（附件） | `[{文件对象}]` | 无法提供文件时省略 |\n| `videobox`（视频） | `[{文件对象}]` | 无法提供文件时省略 |\n| `richtext`（富文本） | `val:[\"富文本HTML\"]` 且 `content:\"富文本HTML\"` | 见 4.2 |\n| `detailcombox`（子表单） | `rows:[[子字段对象数组]]` | 子字段同样含 alias/compt/val |",
-      "images": []
-    },
-    {
-      "chunk_id": 3514,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.2 富文本字段「问题描述」生成规则",
-      "content": "单） | `rows:[[子字段对象数组]]` | 子字段同样含 alias/compt/val |\n\n#### 4.2 富文本字段「问题描述」生成规则\n「问题描述」字段为 `richtext` 富文本类型，值必须为 HTML。默认内容（模板）如下：\n\n```\n问题详细描述：\n\n解决问题所需主要信息：\n单位fid：\n应用名称：\n表单id或审批id：\n\n测试账号：（若反馈的问题与具体用户相关，请提供测试账号供复现问题使用）\n登录方式：\n账号：\n密码：\n```\n\n对应生成的 HTML 结构如下（每行一个 `<p>` 段落，空行用 `<p><br/></p>` 表示；**生成时保持该结构不变，仅填充内容**）：\n\n```\n<p>问题详细描述：</p>\n<p><br/></p>\n<p>解决问题所需主要信息：</p>\n<p>单位fid：</p>\n<p>应用名称：</p>\n<p>表单id或审批id：</p>\n<p><br/></p>\n<p>测试账号：（若反馈的问题与具体用户相关，请提供测试账号供复现问题使用）</p>\n<p>登录方式：</p>\n<p>账号：</p>\n<p>密码：</p>\n```",
-      "images": []
-    },
-    {
-      "chunk_id": 3515,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.2 富文本字段「问题描述」生成规则",
-      "content": "复现问题使用）</p>\n<p>登录方式：</p>\n<p>账号：</p>\n<p>密码：</p>\n```\n\n填充规则：\n1. **问题详细描述**：将「问题详细描述：」下方空段 `<p><br/></p>` 替换为第 1 步总结的问题描述内容（保留 `<p>` 段落，内容直接写在 `<p>` 内）。\n2. **主要信息区**：在「单位fid：」「应用名称：」「表单id或审批id：」的冒号后追加对话中提取到的对应值；对话中无法确定的留空（保留冒号即可）。\n3. **测试账号区**：若问题与具体用户相关，在「登录方式：」「账号：」「密码：」后填入对话中的账号信息；否则保留原样。\n4. 生成时仅填充内容，保持默认结构的段落顺序不变；不要在 HTML 中额外引入 callout-block / element-id / hr 等结构。\n\n该字段在 precast 中的写法（`val` 与 `content` 均填填充后的完整 HTML）：\n\n```json\n{\n  \"alias\": \"question_description\",\n  \"compt\": \"richtext\",\n  \"val\": [\"<填充后的完整HTML>\"],\n  \"content\": \"<填充后的完整HTML>\"\n}\n```",
-      "images": []
-    },
-    {
-      "chunk_id": 3516,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.2 富文本字段「问题描述」生成规则",
-      "content": "\"<填充后的完整HTML>\"],\n  \"content\": \"<填充后的完整HTML>\"\n}\n```\n\n> 「问题描述」的 alias 固定为 `question_description`，即使接口字段结构中不返回该字段，也必须将其加入 precast。",
-      "images": []
-    },
-    {
-      "chunk_id": 3517,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.3 字段值匹配规则（重要）",
-      "content": "tion_description`，即使接口字段结构中不返回该字段，也必须将其加入 precast。\n\n#### 4.3 字段值匹配规则（重要）\n- `alias`、`compt` 必须与第 3 步接口返回**完全一致**（包括大小写，如 `editinput`、`numberinput`）。\n- `val` 的结构必须与 `compt` 类型匹配（见 4.1 对照表），**结构不匹配会导致表单无法正确回填**。\n- 选择类字段（checklist / radiobutton / selectbox）的选项值必须取接口返回 `options` 中真实存在的选项文本。\n- 无法从对话中确认值的字段（如联系人、附件、视频）一律不放入 precast，避免填错。\n- 对话中无依据的内容不得臆造，留空让用户补充。",
-      "images": []
-    },
-    {
-      "chunk_id": 3518,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.4 反馈表固定字段映射（必须全部放入 precast）",
-      "content": "附件、视频）一律不放入 precast，避免填错。\n- 对话中无依据的内容不得臆造，留空让用户补充。\n\n#### 4.4 反馈表固定字段映射（必须全部放入 precast）\n无论接口返回哪些字段，以下 4 个字段的 precast 条目都必须生成：\n\n```json\n{\n  \"data\": [\n    {\"alias\": \"products\", \"compt\": \"checklist\", \"val\": [{\"val\": \"<产品模块选项>\"}]},\n    {\"alias\": \"fid\", \"compt\": \"editinput\", \"val\": [\"<单位fid>\"]},\n    {\"alias\": \"question_type\", \"compt\": \"checklist\", \"val\": [{\"val\": \"<问题类型选项>\"}]},\n    {\"alias\": \"question_description\", \"compt\": \"richtext\", \"val\": [\"<填充后的完整HTML>\"], \"content\": \"<填充后的完整HTML>\"}\n  ]\n}\n```",
-      "images": []
-    },
-    {
-      "chunk_id": 3519,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.4 反馈表固定字段映射（必须全部放入 precast）",
-      "content": "充后的完整HTML>\"], \"content\": \"<填充后的完整HTML>\"}\n  ]\n}\n```\n\n取值规则：\n- **products（产品模块）**：从接口返回的 options 中选取与对话最匹配的模块（表单/审批/信息查询/图表引擎/数据工厂/聚合表/空间预约/座位预约/考勤管理/报表引擎/报告引擎/学生评价系统/业务流引擎/问卷表单/公文流转）；多个模块可放多个 `{\"val\":\"...\"}` 元素。\n- **fid（FID）**：填入对话中涉及的单位 fid；无法确定时默认填 `\"97253\"`。\n- **question_type（问题类型）**：从接口返回的 options 中选取最匹配的类型（产品bug/产品需求/产品功能不知道如何使用/判断需求能否实现/业务系统搭建指导/预约、中职项目对接（已沟通）/其他）。\n- **question_description（问题描述）**：按 4.2 规则生成填充后的完整 HTML。",
-      "images": []
-    },
-    {
-      "chunk_id": 3520,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 5 步：拼接完整链接",
-      "content": "uestion_description（问题描述）**：按 4.2 规则生成填充后的完整 HTML。\n\n### 第 5 步：拼接完整链接\n1. 将 precast JSON 做 URL 编码（UTF-8，与普通 query 参数编码一致）。\n2. 拼接规则：`<第 2 步获取的基础链接>&precast=<URL编码后的JSON>`。\n   - office-mcp 返回的基础链接已包含 `?id=...&fidEnc=...&enc=...` 查询参数，因此用 `&` 连接。\n   - 若基础链接无任何查询参数，则用 `?precast=...`。\n3. precast 参数直接拼在链接末尾，**不要改动基础链接中的任何已有参数**。",
-      "images": []
-    },
-    {
-      "chunk_id": 3521,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 6 步：输出给用户",
-      "content": "=...`。\n3. precast 参数直接拼在链接末尾，**不要改动基础链接中的任何已有参数**。\n\n### 第 6 步：输出给用户\n向用户展示：\n- 完整的反馈表填写链接（可点击）。\n- 已自动预填字段的简要说明。\n- 提示用户点击链接进入填写页，补充剩余信息后提交。",
-      "images": []
-    },
-    {
-      "chunk_id": 3522,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 输出规范",
-      "content": "接（可点击）。\n- 已自动预填字段的简要说明。\n- 提示用户点击链接进入填写页，补充剩余信息后提交。\n\n## 输出规范\n最终回复使用以下结构：\n\n```\n根据您的描述，我已为您生成问题反馈表的填写链接（相关字段已自动预填）：\n\n**反馈表填写链接**：[点击填写](<完整链接>)\n\n- 已自动预填：产品模块 / 问题类型 / FID / 问题描述 等\n- 请点击上方链接进入填写页，补充必要信息后提交即可。\n```",
-      "images": []
-    },
-    {
-      "chunk_id": 3523,
-      "source_file": "agent_config/skills/feedback_form_link.md",
-      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 注意事项与降级策略",
-      "content": "题类型 / FID / 问题描述 等\n- 请点击上方链接进入填写页，补充必要信息后提交即可。\n```\n\n## 注意事项与降级策略\n- 若 office-mcp 调用失败（获取链接或字段结构失败）：降级为直接引导用户填写反馈表固定链接 `http://16q.cn/PUSjHK`，不拼接 precast。\n- 生成链接后如需校验，可检查 `precast` 参数是否完整且已 URL 编码（无裸 `{`、`\"`、中文等未编码字符）。\n- 生成的链接仅用于引导用户填写，不要公开泄露。",
-      "images": []
-    },
-    {
       "chunk_id": 3524,
       "source_file": "agent_config/skills/temporary_context_management.md",
       "header_chain": "Skill: 临时 Context 管理 (Temporary Context Management)",
@@ -37112,6 +36972,153 @@
       "source_file": "agent_config/skills/knowledge_retrieval/knowledge_retrieval.md",
       "header_chain": "Skill: 知识检索 (Knowledge Retrieval) > 使用示例",
       "content": "\n- `hybrid_search.py`：混合检索引擎核心代码（BM25 + 向量 + RRF）。\n\n## 使用示例\n- 用户问：“怎么导出数据？”\n- Skill 动作：匹配索引中的“数据导出”，定位到 `context/faq/general_faq.md`，提取导出相关的 Q&A 段落。",
+      "images": []
+    },
+    {
+      "chunk_id": 3626,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator)",
+      "content": "# Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator)",
+      "images": []
+    },
+    {
+      "chunk_id": 3627,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 目标",
+      "content": " Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator)\n\n## 目标\n当需要引导用户填写「问题反馈表」时，将最近的对话内容总结后，通过 office-mcp 获取反馈表的填写页面链接，并以 precast 参数把总结内容预填到表单字段中，最终生成一个带预填数据的完整链接展示给用户。用户点击链接进入填写页后，只需补充少量信息即可提交，无需重复描述问题。",
+      "images": []
+    },
+    {
+      "chunk_id": 3628,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 触发条件",
+      "content": "预填数据的完整链接展示给用户。用户点击链接进入填写页后，只需补充少量信息即可提交，无需重复描述问题。\n\n## 触发条件\n- 无法识别用户意图、无法回答用户问题，需要引导用户提交反馈时（兜底场景）。\n- 用户主动要求「提交反馈 / 填写反馈表 / 反馈问题」时。\n- 对话陷入死循环需终止并引导用户反馈时。",
+      "images": []
+    },
+    {
+      "chunk_id": 3629,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 目录结构",
+      "content": "户主动要求「提交反馈 / 填写反馈表 / 反馈问题」时。\n- 对话陷入死循环需终止并引导用户反馈时。\n\n## 目录结构\n- `feedback_form_link.md`：本技能描述文件。\n- `build_link.py`：precast URL 编码与链接拼接脚本（供 `feedback_form_link_encode` 调度调用，也可命令行单独使用）。",
+      "images": []
+    },
+    {
+      "chunk_id": 3630,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 前置信息（问题反馈表固定参数）",
+      "content": "接脚本（供 `feedback_form_link_encode` 调度调用，也可命令行单独使用）。\n\n## 前置信息（问题反馈表固定参数）\n- fid：`97253`\n- 表单 ID（formId）：`154231`（用户侧习惯称之为「审批id」）\n- 表单类型（formType）：`0`（已验证：该反馈表以 formType=0 查询可返回字段配置与填写链接，formType=1/2 均查不到）\n- 反馈表名称：办公产品问题反馈表\n- 字段 alias（已确认，precast 中必须使用这些 alias）：\n  | 字段 | alias | compt |\n  | --- | --- | --- |\n  | 产品模块 | `products` | `checklist` |\n  | FID | `fid` | `editinput` |\n  | 问题类型 | `question_type` | `checklist` |\n  | 问题描述 | `question_description` | `richtext` |",
+      "images": []
+    },
+    {
+      "chunk_id": 3631,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤",
+      "content": "|\n  | 问题描述 | `question_description` | `richtext` |\n\n## 执行步骤",
+      "images": []
+    },
+    {
+      "chunk_id": 3632,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 1 步：总结最近对话",
+      "content": "述 | `question_description` | `richtext` |\n\n## 执行步骤\n\n### 第 1 步：总结最近对话\n将本次会话中的关键信息整理为结构化总结，作为表单预填的数据来源。总结至少覆盖：\n- **问题描述**：用户遇到的问题现象、操作路径、复现步骤、期望结果。\n- **产品模块**：表单 / 审批 / 信息查询 / 图表引擎 / 数据工厂 / 聚合表 / 空间预约 / 座位预约 / 考勤管理 / 报表引擎 / 报告引擎 / 学生评价系统 / 业务流引擎 / 问卷表单 / 公文流转（按对话实际涉及模块判断）。\n- **问题类型**：产品bug / 产品需求 / 产品功能不知道如何使用 / 判断需求能否实现 / 业务系统搭建指导 / 预约、中职项目对接（已沟通）/ 其他。\n- **单位 fid、应用名称、表单 id、审批 id**：对话中如出现则提取。\n- **测试账号**：若问题与具体用户相关，记录登录方式 / 账号 / 密码，供复现问题使用。",
+      "images": []
+    },
+    {
+      "chunk_id": 3633,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 2 步：获取反馈表填写页面链接",
+      "content": "取。\n- **测试账号**：若问题与具体用户相关，记录登录方式 / 账号 / 密码，供复现问题使用。\n\n### 第 2 步：获取反馈表填写页面链接\n调用 office-mcp 的「获取应用链接」能力（`office_form_apply_page_url`）：\n\n```\n<task><type>office-mcp.office_form_apply_page_url</type><arguments>{\"formType\":0,\"formId\":154231,\"fid\":97253}</arguments></task>\n```\n\n记录返回的 apply 页面基础链接（形如 `http://office.chaoxing.com/front/web/apps/forms/fore/apply?id=154231&fidEnc=...&enc=...`）。",
+      "images": []
+    },
+    {
+      "chunk_id": 3634,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 3 步：获取反馈表字段结构",
+      "content": "s/forms/fore/apply?id=154231&fidEnc=...&enc=...`）。\n\n### 第 3 步：获取反馈表字段结构\n调用 office-mcp 的「获取应用字段结构」能力（`office_form_compts_info`）：\n\n```\n<task><type>office-mcp.office_form_compts_info</type><arguments>{\"formType\":0,\"formId\":154231,\"fid\":97253}</arguments></task>\n```\n\n逐项记录接口返回字段的 `alias`（字段别名）、`compt`（组件类型）、`label`（字段名）、`options`（选项，选择类字段才有）。\n**必须使用接口返回的真实 alias 与 compt，严禁臆造或套用其他表单的 alias。**\n\n> 说明：当前接口对 154231 返回 产品模块(alias=`products`)/FID(alias=`fid`)/问题类型(alias=`question_type`) 三个字段；「问题描述」为富文本字段，接口不返回，其 alias 固定为 `question_description`（见 4.4）。",
+      "images": []
+    },
+    {
+      "chunk_id": 3635,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数",
+      "content": "段，接口不返回，其 alias 固定为 `question_description`（见 4.4）。\n\n### 第 4 步：生成 precast 参数\n按以下 JSON 结构组织（`data` 为数组，每项对应一个要预填的字段）：\n\n```json\n{\n  \"data\": [\n    {\"alias\": \"<字段alias>\", \"compt\": \"<组件类型>\", \"val\": [<值结构>]},\n    {\"alias\": \"<字段alias>\", \"compt\": \"richtext\", \"val\": [\"<HTML>\"], \"content\": \"<HTML>\"}\n  ]\n}\n```",
+      "images": []
+    },
+    {
+      "chunk_id": 3636,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.1 组件类型（compt）与值结构（val）对照表",
+      "content": " \"val\": [\"<HTML>\"], \"content\": \"<HTML>\"}\n  ]\n}\n```\n\n#### 4.1 组件类型（compt）与值结构（val）对照表\n| compt | val 结构 | 示例 |\n| --- | --- | --- |\n| `editinput`（单行输入） | `[\"文本\"]` | `[\"97253\"]` |\n| `editTextarea` / `edittextarea`（多行输入） | `[\"文本\"]` | `[\"多行内容\"]` |\n| `numberInput` / `numberinput`（数字） | `[\"数字字符串\"]` | `[\"123456\"]` |\n| `dateInput` / `dateinput`（日期时间） | `[\"yyyy-MM-dd HH:mm\"]` | `[\"2026-08-30 10:00\"]` |\n| `radiobutton`（单选） | `[{\"val\":\"选项\"}]` | `[{\"val\":\"选项1\"}]` |\n| `checklist`（多选） | `[{\"val\":\"选项1\"},{\"val\":\"选项2\"}]` | 多选可含多个元素 |\n| `selectbox`（下拉单选） | `[{\"val\":\"选项\"}]` | `[{\"val\":\"选项2\"}]` |\n| `selectmultibox`（下拉多选） | `[{\"val\":\"选项1\"},{\"val\":\"选项2\"}]` | |\n| `contact`（联系人） | `[[{\"puid\":数字,\"uname\":\"姓名\"}]]` | 无法确认具体用户时省略 |\n| `belonger`（所属人） | `[[{\"puid\":数字,\"uname\":\"姓名\"}]]` | 无法确认具体用户时省略 |\n| `imagebox`（图片） | `[{文件对象}]` | 无法提供文件时省略 |\n| `fileupload`（附件） | `[{文件对象}]` | 无法提供文件时省略 |\n| `videobox`（视频） | `[{文件对象}]` | 无法提供文件时省略 |\n| `richtext`（富文本） | `val:[\"富文本HTML\"]` 且 `content:\"富文本HTML\"` | 见 4.2 |\n| `detailcombox`（子表单） | `rows:[[子字段对象数组]]` | 子字段同样含 alias/compt/val |",
+      "images": []
+    },
+    {
+      "chunk_id": 3637,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.2 富文本字段「问题描述」生成规则",
+      "content": "单） | `rows:[[子字段对象数组]]` | 子字段同样含 alias/compt/val |\n\n#### 4.2 富文本字段「问题描述」生成规则\n「问题描述」字段为 `richtext` 富文本类型，值必须为 HTML。默认内容（模板）如下：\n\n```\n问题详细描述：\n\n解决问题所需主要信息：\n单位fid：\n应用名称：\n表单id或审批id：\n\n测试账号：（若反馈的问题与具体用户相关，请提供测试账号供复现问题使用）\n登录方式：\n账号：\n密码：\n```\n\n对应生成的 HTML 结构如下（每行一个 `<p>` 段落，空行用 `<p><br/></p>` 表示；**生成时保持该结构不变，仅填充内容**）：\n\n```\n<p>问题详细描述：</p>\n<p><br/></p>\n<p>解决问题所需主要信息：</p>\n<p>单位fid：</p>\n<p>应用名称：</p>\n<p>表单id或审批id：</p>\n<p><br/></p>\n<p>测试账号：（若反馈的问题与具体用户相关，请提供测试账号供复现问题使用）</p>\n<p>登录方式：</p>\n<p>账号：</p>\n<p>密码：</p>\n```",
+      "images": []
+    },
+    {
+      "chunk_id": 3638,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.2 富文本字段「问题描述」生成规则",
+      "content": "复现问题使用）</p>\n<p>登录方式：</p>\n<p>账号：</p>\n<p>密码：</p>\n```\n\n填充规则：\n1. **问题详细描述**：将「问题详细描述：」下方空段 `<p><br/></p>` 替换为第 1 步总结的问题描述内容（保留 `<p>` 段落，内容直接写在 `<p>` 内）。\n2. **主要信息区**：在「单位fid：」「应用名称：」「表单id或审批id：」的冒号后追加对话中提取到的对应值；对话中无法确定的留空（保留冒号即可）。\n3. **测试账号区**：若问题与具体用户相关，在「登录方式：」「账号：」「密码：」后填入对话中的账号信息；否则保留原样。\n4. 生成时仅填充内容，保持默认结构的段落顺序不变；不要在 HTML 中额外引入 callout-block / element-id / hr 等结构。\n\n该字段在 precast 中的写法（`val` 与 `content` 均填填充后的完整 HTML）：\n\n```json\n{\n  \"alias\": \"question_description\",\n  \"compt\": \"richtext\",\n  \"val\": [\"<填充后的完整HTML>\"],\n  \"content\": \"<填充后的完整HTML>\"\n}\n```",
+      "images": []
+    },
+    {
+      "chunk_id": 3639,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.2 富文本字段「问题描述」生成规则",
+      "content": "\"<填充后的完整HTML>\"],\n  \"content\": \"<填充后的完整HTML>\"\n}\n```\n\n> 「问题描述」的 alias 固定为 `question_description`，即使接口字段结构中不返回该字段，也必须将其加入 precast。",
+      "images": []
+    },
+    {
+      "chunk_id": 3640,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.3 字段值匹配规则（重要）",
+      "content": "tion_description`，即使接口字段结构中不返回该字段，也必须将其加入 precast。\n\n#### 4.3 字段值匹配规则（重要）\n- `alias`、`compt` 必须与第 3 步接口返回**完全一致**（包括大小写，如 `editinput`、`numberinput`）。\n- `val` 的结构必须与 `compt` 类型匹配（见 4.1 对照表），**结构不匹配会导致表单无法正确回填**。\n- 选择类字段（checklist / radiobutton / selectbox）的选项值必须取接口返回 `options` 中真实存在的选项文本。\n- 无法从对话中确认值的字段（如联系人、附件、视频）一律不放入 precast，避免填错。\n- 对话中无依据的内容不得臆造，留空让用户补充。",
+      "images": []
+    },
+    {
+      "chunk_id": 3641,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.4 反馈表固定字段映射（必须全部放入 precast）",
+      "content": "附件、视频）一律不放入 precast，避免填错。\n- 对话中无依据的内容不得臆造，留空让用户补充。\n\n#### 4.4 反馈表固定字段映射（必须全部放入 precast）\n无论接口返回哪些字段，以下 4 个字段的 precast 条目都必须生成：\n\n```json\n{\n  \"data\": [\n    {\"alias\": \"products\", \"compt\": \"checklist\", \"val\": [{\"val\": \"<产品模块选项>\"}]},\n    {\"alias\": \"fid\", \"compt\": \"editinput\", \"val\": [\"<单位fid>\"]},\n    {\"alias\": \"question_type\", \"compt\": \"checklist\", \"val\": [{\"val\": \"<问题类型选项>\"}]},\n    {\"alias\": \"question_description\", \"compt\": \"richtext\", \"val\": [\"<填充后的完整HTML>\"], \"content\": \"<填充后的完整HTML>\"}\n  ]\n}\n```",
+      "images": []
+    },
+    {
+      "chunk_id": 3642,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 4 步：生成 precast 参数 > 4.4 反馈表固定字段映射（必须全部放入 precast）",
+      "content": "充后的完整HTML>\"], \"content\": \"<填充后的完整HTML>\"}\n  ]\n}\n```\n\n取值规则：\n- **products（产品模块）**：从接口返回的 options 中选取与对话最匹配的模块（表单/审批/信息查询/图表引擎/数据工厂/聚合表/空间预约/座位预约/考勤管理/报表引擎/报告引擎/学生评价系统/业务流引擎/问卷表单/公文流转）；多个模块可放多个 `{\"val\":\"...\"}` 元素。\n- **fid（FID）**：填入对话中涉及的单位 fid；无法确定时默认填 `\"97253\"`。\n- **question_type（问题类型）**：从接口返回的 options 中选取最匹配的类型（产品bug/产品需求/产品功能不知道如何使用/判断需求能否实现/业务系统搭建指导/预约、中职项目对接（已沟通）/其他）。\n- **question_description（问题描述）**：按 4.2 规则生成填充后的完整 HTML。",
+      "images": []
+    },
+    {
+      "chunk_id": 3643,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 5 步：拼接完整链接（脚本编码，禁止手工拼接）",
+      "content": "uestion_description（问题描述）**：按 4.2 规则生成填充后的完整 HTML。\n\n### 第 5 步：拼接完整链接（脚本编码，禁止手工拼接）\n**precast 的 URL 编码与链接拼接由脚本统一完成，严禁大模型自行编码或手工拼接。** 通过 `<task>` 调用 `feedback_form_link_encode` 技能，传入基础链接与 precast JSON：\n\n```\n<task><type>feedback_form_link_encode</type><arguments>{\"base_url\": \"<第 2 步获取的基础链接>\", \"precast\": {\"data\": [...]}}</arguments></task>\n```\n\n- `base_url`：第 2 步 office-mcp 返回的 apply 页面基础链接，原样传入。\n- `precast`：第 4 步生成的 precast JSON 对象，原样传入。\n- 脚本会按规则自动处理分隔符（基础链接含查询参数用 `&`，否则用 `?`），且不改动基础链接中的任何已有参数。\n\n`feedback_form_link_encode` 返回结果中包含拼接好的完整链接，直接使用该结果向用户展示即可。",
+      "images": []
+    },
+    {
+      "chunk_id": 3644,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 执行步骤 > 第 6 步：输出给用户",
+      "content": "_form_link_encode` 返回结果中包含拼接好的完整链接，直接使用该结果向用户展示即可。\n\n### 第 6 步：输出给用户\n向用户展示：\n- 完整的反馈表填写链接（可点击）。\n- 已自动预填字段的简要说明。\n- 提示用户点击链接进入填写页，补充剩余信息后提交。",
+      "images": []
+    },
+    {
+      "chunk_id": 3645,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 输出规范",
+      "content": "接（可点击）。\n- 已自动预填字段的简要说明。\n- 提示用户点击链接进入填写页，补充剩余信息后提交。\n\n## 输出规范\n最终回复使用以下结构：\n\n```\n根据您的描述，我已为您生成问题反馈表的填写链接（相关字段已自动预填）：\n\n**反馈表填写链接**：[点击填写](<完整链接>)\n\n- 已自动预填：产品模块 / 问题类型 / FID / 问题描述 等\n- 请点击上方链接进入填写页，补充必要信息后提交即可。\n```",
+      "images": []
+    },
+    {
+      "chunk_id": 3646,
+      "source_file": "agent_config/skills/feedback_form_link/feedback_form_link.md",
+      "header_chain": "Skill: 生成问题反馈表填写链接 (Feedback Form Link Generator) > 注意事项与降级策略",
+      "content": "题类型 / FID / 问题描述 等\n- 请点击上方链接进入填写页，补充必要信息后提交即可。\n```\n\n## 注意事项与降级策略\n- 若 office-mcp 调用失败（获取链接或字段结构失败）：降级为直接引导用户填写反馈表固定链接 `http://16q.cn/PUSjHK`，不拼接 precast。\n- precast 的 URL 编码由 `build_link.py` 脚本完成（UTF-8，编码所有保留字符）；若 `feedback_form_link_encode` 调用失败，同样降级为固定链接。\n- 生成的链接仅用于引导用户填写，不要公开泄露。",
       "images": []
     }
   ],
@@ -40650,28 +40657,6 @@
       3502,
       3503
     ],
-    "agent_config/skills/feedback_form_link.md": [
-      3504,
-      3505,
-      3506,
-      3507,
-      3508,
-      3509,
-      3510,
-      3511,
-      3512,
-      3513,
-      3514,
-      3515,
-      3516,
-      3517,
-      3518,
-      3519,
-      3520,
-      3521,
-      3522,
-      3523
-    ],
     "agent_config/skills/temporary_context_management.md": [
       3524,
       3525,
@@ -40793,6 +40778,29 @@
       3623,
       3624,
       3625
+    ],
+    "agent_config/skills/feedback_form_link/feedback_form_link.md": [
+      3626,
+      3627,
+      3628,
+      3629,
+      3630,
+      3631,
+      3632,
+      3633,
+      3634,
+      3635,
+      3636,
+      3637,
+      3638,
+      3639,
+      3640,
+      3641,
+      3642,
+      3643,
+      3644,
+      3645,
+      3646
     ]
   }
 }

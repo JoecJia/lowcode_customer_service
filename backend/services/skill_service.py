@@ -13,7 +13,7 @@ SKILL_REGISTRY = {
     "build_business_system": "../agent_config/skills/build_business_system.md",
     "context_transformation": "../agent_config/skills/context_transformation/context_transformation.md",
     "temporary_context_management": "../agent_config/skills/temporary_context_management.md",
-    "feedback_form_link": "../agent_config/skills/feedback_form_link.md",
+    "feedback_form_link": "../agent_config/skills/feedback_form_link/feedback_form_link.md",
 }
 
 TOOL_PROTOCOL = (
@@ -29,6 +29,7 @@ TOOL_PROTOCOL = (
     "  - context_transformation: Context 转化与索引维护\n"
     "  - temporary_context_management: 临时内容记录\n"
     "  - feedback_form_link: 生成问题反馈表填写链接（自动预填对话总结）\n"
+    "  - feedback_form_link_encode: 将 precast JSON 做 URL 编码并拼接完整反馈表链接（必须提供 base_url 与 precast，precast 为第 4 步生成的 JSON 对象）\n"
     "\n收到 <task> 后，我会加载对应 Skill 文件的完整内容并注入上下文。"
     "你收到 <task_result> 后，必须严格按 Skill 文件中定义的执行步骤完成任务。"
     "如果你已经有足够信息可以直接回答用户，则无需输出 <task>。"
@@ -54,6 +55,9 @@ def get_system_messages() -> list[dict]:
 
 
 async def dispatch_skill(repo_dir: str, task: Task) -> str:
+    if task.task_type == "feedback_form_link_encode":
+        return _encode_feedback_form_link(task)
+
     skill_path = SKILL_REGISTRY.get(task.task_type)
     if skill_path:
         if task.task_type == "knowledge_retrieval":
@@ -81,6 +85,25 @@ async def dispatch_skill(repo_dir: str, task: Task) -> str:
         return await mcp_manager.call_tool(task.task_type, task.arguments or {})
 
     return f"Unsupported task type: {task.task_type}"
+
+
+def _encode_feedback_form_link(task: Task) -> str:
+    """将 precast JSON 做 URL 编码并拼接完整反馈表链接（编码由脚本统一完成）。"""
+    from skills.feedback_form_link.build_link import build_feedback_form_link
+
+    args = task.arguments or {}
+    base_url = args.get("base_url")
+    precast = args.get("precast")
+    if not base_url or not isinstance(precast, dict):
+        return (
+            "错误：feedback_form_link_encode 需要参数 base_url（字符串）与 precast（JSON 对象）。"
+            "请先通过 office-mcp 获取基础链接并生成 precast JSON 后重试。"
+        )
+    try:
+        link = build_feedback_form_link(base_url, precast)
+    except Exception as e:
+        return f"生成反馈表链接失败：{e}"
+    return f"完整反馈表填写链接（precast 已自动 URL 编码）：\n{link}"
 
 
 def format_task_result(task_type: str, result_text: str) -> dict:

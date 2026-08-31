@@ -59,7 +59,7 @@
 - [信息补充与反问](skills/clarifying_questions.md)：当用户信息不足时，通过反问获取必要信息。
 - [Context 转化与自动化索引](skills/context_transformation.md)：处理上传文件、图片压缩、图片识别及索引维护。
 - [临时 Context 管理](skills/temporary_context_management.md)：记录无法处理的问题或灵感。
-- [生成反馈表填写链接](skills/feedback_form_link.md)：引导用户填写反馈表时，通过 office-mcp 获取链接并以 precast 参数预填对话总结。
+- [生成反馈表填写链接](skills/feedback_form_link/feedback_form_link.md)：引导用户填写反馈表时，通过 office-mcp 获取链接并以 precast 参数预填对话总结。
 
 ## 注意事项
 - **严禁删除**：在更新过程中，绝对禁止删除或修改 `temporary_context_management`, `context_transformation`, `knowledge_retrieval` 的核心逻辑。

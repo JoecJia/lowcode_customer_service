@@ -112,6 +112,9 @@ skills/
 ├── scenario_solutions.md             # 简单 Skill（单文件）
 ├── temporary_context_management.md   # 简单 Skill（单文件）
 ├── usage_scenarios.md                # 简单 Skill（单文件）
+├── feedback_form_link/               # 复杂 Skill（含 Python 脚本）
+│   ├── feedback_form_link.md
+│   └── build_link.py
 ├── context_transformation/           # 复杂 Skill（含 Python 脚本）
 │   ├── context_transformation.md
 │   ├── vectorizer.py
