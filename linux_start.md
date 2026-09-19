@@ -29,6 +29,24 @@ EOF
 
 > 生产环境请修改 `JWT_SECRET` 为随机字符串。
 
+### 超星 Passport 登录所需常量
+
+登录已切换为超星 passport 免登，需在 `.env` 中补充 `PASSPORT_*` 常量
+（appid / appkey / debugkey / userinfo 握手密钥 / VC3 AES 密钥 / MD5 密钥 / 接口域名），
+完整清单与来源说明见 `README.md` →「登录说明」。
+
+> - 办公区 / VPN 环境必须将 `PASSPORT_KEY_MODE` 设为 `debug`（使用 debugKey），
+>   公网生产环境使用 `prod`，否则 passport 会返回「signature 校验未通过，办公区 ip、VPN ip 请使用 debugKey」。
+> - 部署域名需在 `APP_ORIGINS` 中登记（CORS 白名单），并确保 passport Cookie 的 Domain 覆盖该域名。
+
+部署后可执行自检脚本确认接口域名、签名私钥与 Cookie 验签：
+
+```bash
+python debug/passport_selfcheck.py
+# 带真实 Cookie 验证整条验签链路：
+python debug/passport_selfcheck.py --cookie "UID=..; fid=..; vc3=..; _d=.."
+```
+
 ## 3. 安装依赖
 
 ```bash

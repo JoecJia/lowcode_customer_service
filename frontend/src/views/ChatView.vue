@@ -847,8 +847,8 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="user-info">
-          <span class="user-name">{{ currentUser?.username || '' }}</span>
-          <div class="user-avatar">{{ (currentUser?.username || '?')[0].toUpperCase() }}</div>
+          <span class="user-name">{{ currentUser?.realname || currentUser?.username || '' }}</span>
+          <div class="user-avatar">{{ ((currentUser?.realname || currentUser?.username || '?')[0] || '?').toUpperCase() }}</div>
           <button class="btn-logout" @click="handleLogout">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M5 2H3a1 1 0 00-1 1v8a1 1 0 001 1h2M10 10l3-3-3-3M13 7H5"/>
@@ -878,7 +878,7 @@ onBeforeUnmount(() => {
                 alt="assistant"
                 class="avatar-img"
               />
-              <span v-else>{{ (currentUser?.username || '?')[0].toUpperCase() }}</span>
+              <span v-else>{{ ((currentUser?.realname || currentUser?.username || '?')[0] || '?').toUpperCase() }}</span>
             </div>
 
             <!-- 消息主体 -->
