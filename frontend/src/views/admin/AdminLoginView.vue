@@ -1,24 +1,14 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import { buildPassportLoginUrl, passportLogin } from '../../api/auth'
+import { clearLoggedOutFlag } from '../../composables/useAuth'
 
 const router = useRouter()
 
-const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
 const errorMsg = ref('')
-
-const loginForm = reactive({
-  username: '',
-  password: '',
-})
-
-const loginRules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-}
 
 onMounted(async () => {
   const token = localStorage.getItem('admin_token')
@@ -31,49 +21,36 @@ onMounted(async () => {
       }
     } catch { /* not logged in */ }
   }
-  await nextTick()
-  document.getElementById('admin-username')?.focus()
+  await tryAdminLogin()
 })
 
-function clearError() {
-  errorMsg.value = ''
-}
-
-async function handleLogin() {
-  if (!loginFormRef.value) return
-
-  const valid = await loginFormRef.value.validate().catch(() => false)
-  if (!valid) return
-
+/** 用超星登录态换取管理后台 token，并校验后台管理权限 */
+async function tryAdminLogin() {
   loading.value = true
   errorMsg.value = ''
 
   try {
-    const resp = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: loginForm.username,
-        password: loginForm.password,
-      }),
-    })
+    const resp = await passportLogin()
+    if (!resp.ok) {
+      errorMsg.value = '未检测到超星登录状态，请先登录超星账号'
+      return
+    }
 
     const data = await resp.json()
-
-    if (resp.ok && data.ok && data.user) {
-      if (data.user.can_admin !== 1) {
-        errorMsg.value = '无管理权限，登录失败'
-        loading.value = false
-        return
-      }
-
-      localStorage.setItem('admin_token', data.access_token)
-      localStorage.setItem('admin_info', JSON.stringify(data.user))
-      ElMessage.success('登录成功')
-      router.push('/admin')
-    } else {
-      errorMsg.value = '用户名或密码错误'
+    if (!data?.user) {
+      errorMsg.value = '登录失败，请稍后重试'
+      return
     }
+    if (data.user.can_admin !== 1) {
+      errorMsg.value = '无管理权限，登录失败'
+      return
+    }
+
+    clearLoggedOutFlag()
+    localStorage.setItem('admin_token', data.access_token)
+    localStorage.setItem('admin_info', JSON.stringify(data.user))
+    ElMessage.success('登录成功')
+    router.push('/admin')
   } catch {
     errorMsg.value = '网络连接失败，请稍后重试'
   } finally {
@@ -81,18 +58,10 @@ async function handleLogin() {
   }
 }
 
-// 密码仅允许 ASCII 字符（字母、数字、符号）
-function filterPasswordInput(val: string) {
-  clearError()
-  loginForm.password = val.replace(/[^\x20-\x7e]/g, '')
-}
-
-// 密码框 Enter：仅当账号密码都齐全且非 IME 组合输入时触发登录
-function onPasswordEnter(e: KeyboardEvent) {
-  if (e.isComposing) return
-  if (loginForm.username.trim() && loginForm.password.trim()) {
-    handleLogin()
-  }
+/** 跳转超星登录页（refer 为本站地址，登录成功后回跳） */
+function handlePassportLogin() {
+  clearLoggedOutFlag()
+  window.location.href = buildPassportLoginUrl()
 }
 </script>
 
@@ -108,7 +77,7 @@ function onPasswordEnter(e: KeyboardEvent) {
           <img src="/origin.png" alt="logo" class="brand-logo-img" />
         </div>
         <h1 class="brand-title">低代码平台智能客服管理后台</h1>
-        <p class="brand-subtitle">管理员登录</p>
+        <p class="brand-subtitle">使用超星账号登录</p>
       </div>
 
       <!-- 错误提示 -->
@@ -119,52 +88,21 @@ function onPasswordEnter(e: KeyboardEvent) {
         <span>{{ errorMsg }}</span>
       </div>
 
-      <!-- 表单 -->
-      <el-form
-        ref="loginFormRef"
-        :model="loginForm"
-        :rules="loginRules"
-        label-position="top"
-        @submit.prevent="handleLogin"
-      >
-        <el-form-item prop="username" label="用户名">
-          <el-input
-            id="admin-username"
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            autocomplete="username"
-            @input="clearError"
-          />
-        </el-form-item>
-
-        <el-form-item prop="password" label="密码">
-          <el-input
-            id="admin-password"
-            v-model="loginForm.password"
-            type="password"
-            show-password
-            placeholder="请输入密码"
-            autocomplete="current-password"
-            @input="filterPasswordInput"
-            @keydown.enter="onPasswordEnter"
-          />
-        </el-form-item>
-      </el-form>
+      <div v-if="loading" class="checking-hint">正在检测超星登录状态...</div>
 
       <!-- 登录按钮 -->
       <el-button
         type="primary"
         size="large"
         class="btn-login"
-        :loading="loading"
-        @click="handleLogin"
+        @click="handlePassportLogin"
       >
-        {{ loading ? '登录中...' : '登 录' }}
+        使用超星账号登录
       </el-button>
 
-      <!-- 底部提示 -->
-      <div class="register-link">
-        管理后台不支持自主注册，请联系超级管理员
+      <div class="login-tip">
+        仅具备后台管理权限的账号可进入，
+        <a href="javascript:void(0)" @click="tryAdminLogin">重新检测登录状态</a>
       </div>
     </div>
   </div>
@@ -259,6 +197,13 @@ function onPasswordEnter(e: KeyboardEvent) {
   flex-shrink: 0;
 }
 
+.checking-hint {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
 .btn-login {
   width: 100%;
   height: 40px;
@@ -268,10 +213,16 @@ function onPasswordEnter(e: KeyboardEvent) {
   margin-top: 4px;
 }
 
-.register-link {
+.login-tip {
   text-align: center;
   margin-top: 20px;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--color-text-tertiary);
+}
+
+.login-tip a {
+  color: var(--color-primary);
+  text-decoration: none;
 }
 </style>
