@@ -7,10 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "agent_config"))
 
+from config import APP_ORIGINS
 from routers.chat import router as chat_router
 from routers.auth import router as auth_router
+from routers.passport import router as passport_router
 from routers.feedback import router as feedback_router
 from routers.admin import router as admin_router
 from services.mcp_service import mcp_manager
@@ -28,7 +31,9 @@ app = FastAPI(title="低代码智能客服", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # 注意：allow_origins=["*"] 与 allow_credentials=True 不能同时使用（对 Cookie 非法），
+    # 这里改用显式来源白名单（APP_ORIGINS，默认 https://service.cxlowcode.com）。
+    allow_origins=APP_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,8 +43,14 @@ app.add_middleware(
 @app.middleware("http")
 async def add_no_cache_header(request, call_next):
     response = await call_next(request)
-    # 静态资源禁用缓存，确保前端更新后立即生效
-    if request.url.path.startswith("/assets/"):
+    # 静态资源与 SPA 入口禁用缓存，确保前端更新后立即生效
+    # 注意：vite 构建产物目录为 /static/（build.assetsDir），知识库图片为 /assets/
+    content_type = response.headers.get("content-type", "")
+    if (
+        request.url.path.startswith("/assets/")
+        or request.url.path.startswith("/static/")
+        or content_type.startswith("text/html")
+    ):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -47,6 +58,7 @@ async def add_no_cache_header(request, call_next):
 
 app.include_router(chat_router)
 app.include_router(auth_router)
+app.include_router(passport_router)
 app.include_router(feedback_router)
 app.include_router(admin_router)
 

@@ -7,6 +7,9 @@ import { getAccounts, createAccount, updateAccountPassword, updateAccountPermiss
 interface UserRow {
   id: number
   username: string
+  uid: string
+  fid: string
+  realname: string
   can_chat: number
   can_admin: number
   created_at: number
@@ -227,7 +230,7 @@ async function handleChangePerm() {
     <div class="accounts-toolbar">
       <el-input
         v-model="searchKeyword"
-        placeholder="搜索用户名…"
+        placeholder="搜索用户名 / 姓名 / UID…"
         class="search-input"
         clearable
         @input="onSearch"
@@ -241,8 +244,18 @@ async function handleChangePerm() {
     <!-- 用户表格 -->
     <div class="accounts-table-wrap">
       <el-table :data="users" stripe style="width: 100%">
-        <el-table-column prop="username" label="用户名" min-width="25%" />
-        <el-table-column label="权限" min-width="45%">
+        <el-table-column label="用户" min-width="30%">
+          <template #default="{ row }">
+            <div class="user-cell">
+              <span class="user-realname">{{ row.realname || row.username || '-' }}</span>
+              <span class="user-uid">UID: {{ row.uid || '-' }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="单位" min-width="12%">
+          <template #default="{ row }">{{ row.fid || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="权限" min-width="33%">
           <template #default="{ row }">
             <span class="perm-text" :class="{ 'perm--on': row.can_chat === 1 }">
               {{ row.can_chat === 1 ? '☑ 前台' : '☐ 前台' }}
@@ -360,6 +373,22 @@ async function handleChangePerm() {
 
 .search-input {
   width: 260px;
+}
+
+.user-cell {
+  display: flex;
+  flex-direction: column;
+  line-height: 18px;
+}
+
+.user-realname {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.user-uid {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
 }
 
 .accounts-table-wrap {

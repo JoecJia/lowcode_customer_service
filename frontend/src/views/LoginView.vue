@@ -1,79 +1,49 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { login } from '../api/auth'
-import { useAuth } from '../composables/useAuth'
+import { buildPassportLoginUrl } from '../api/auth'
+import {
+  bootstrapPassportLogin,
+  clearLoggedOutFlag,
+  hasLoggedOutFlag,
+  useAuth,
+} from '../composables/useAuth'
 
 const router = useRouter()
 const auth = useAuth()
 
-const loginFormRef = ref<FormInstance>()
-const loading = ref(false)
+/** 是否正在静默检测超星登录态 */
+const checking = ref(true)
 const errorMsg = ref('')
 
-const loginForm = reactive({
-  username: '',
-  password: '',
-})
-
-const loginRules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-}
-
-onMounted(() => {
+onMounted(async () => {
+  // 本地已有 token 直接进入
   if (auth.getToken()) {
     router.push('/')
     return
   }
-  nextTick(() => {
-    const el = document.querySelector('.login-card input') as HTMLInputElement
-    el?.focus()
-  })
+
+  // 用户主动退出过 → 不再自动登录，等待手动点击
+  if (hasLoggedOutFlag()) {
+    errorMsg.value = '您已退出登录，可重新使用超星账号登录'
+    checking.value = false
+    return
+  }
+
+  const ok = await bootstrapPassportLogin()
+  if (ok) {
+    router.push('/')
+    return
+  }
+
+  errorMsg.value = '未检测到超星登录状态，请先登录超星账号'
+  checking.value = false
 })
 
-function clearError() {
-  errorMsg.value = ''
-}
-
-// 密码仅允许 ASCII 字符（字母、数字、符号）
-function filterPasswordInput(val: string) {
-  clearError()
-  loginForm.password = val.replace(/[^\x20-\x7e]/g, '')
-}
-
-// 密码框 Enter：仅当账号密码都齐全且非 IME 组合输入时触发登录
-function onPasswordEnter(e: KeyboardEvent) {
-  if (e.isComposing) return
-  if (loginForm.username.trim() && loginForm.password.trim()) {
-    handleLogin()
-  }
-}
-
-async function handleLogin() {
-  if (!loginFormRef.value) return
-  const valid = await loginFormRef.value.validate().catch(() => false)
-  if (!valid) return
-
-  loading.value = true
-  errorMsg.value = ''
-
-  try {
-    const resp = await login(loginForm.username.trim(), loginForm.password)
-    const data = await resp.json()
-    if (resp.ok) {
-      auth.setAuth(data.access_token, data.user)
-      ElMessage.success('登录成功')
-      router.push('/')
-    } else {
-      errorMsg.value = data.detail || '用户名或密码错误'
-      loading.value = false
-    }
-  } catch {
-    errorMsg.value = '网络连接失败，请稍后重试'
-    loading.value = false
-  }
+/** 跳转超星登录页（refer 为本站地址，登录成功后回跳） */
+function handlePassportLogin() {
+  clearLoggedOutFlag()
+  window.location.href = buildPassportLoginUrl()
 }
 </script>
 
@@ -88,7 +58,7 @@ async function handleLogin() {
           <img src="/origin.png" alt="logo" class="brand-logo-img" />
         </div>
         <div class="brand-title">低代码平台智能客服</div>
-        <div class="brand-subtitle">登录您的账号</div>
+        <div class="brand-subtitle">使用超星账号登录</div>
       </div>
 
       <div v-if="errorMsg" class="error-msg">
@@ -99,47 +69,18 @@ async function handleLogin() {
         <span>{{ errorMsg }}</span>
       </div>
 
-      <el-form
-        ref="loginFormRef"
-        :model="loginForm"
-        :rules="loginRules"
-        label-position="top"
-        @submit.prevent="handleLogin"
+      <div v-if="checking" class="checking-hint">正在检测超星登录状态...</div>
+
+      <el-button
+        type="primary"
+        size="large"
+        class="btn-submit"
+        @click="handlePassportLogin"
       >
-        <el-form-item label="用户名" prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            autocomplete="username"
-            @input="clearError"
-          />
-        </el-form-item>
-        <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            show-password
-            placeholder="请输入密码"
-            autocomplete="current-password"
-            @input="filterPasswordInput"
-            @keydown.enter="onPasswordEnter"
-          />
-        </el-form-item>
+        使用超星账号登录
+      </el-button>
 
-        <el-button
-          type="primary"
-          size="large"
-          class="btn-submit"
-          :loading="loading"
-          @click="handleLogin"
-        >
-          {{ loading ? '登录中...' : '登 录' }}
-        </el-button>
-      </el-form>
-
-      <div class="register-link">
-        <router-link to="/register">还没有账号？立即注册</router-link>
-      </div>
+      <div class="login-tip">点击后将跳转超星登录页，登录成功后自动返回本站</div>
     </div>
   </div>
 </template>
@@ -229,6 +170,13 @@ async function handleLogin() {
   margin-bottom: 20px;
 }
 
+.checking-hint {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
 .btn-submit {
   width: 100%;
   height: 40px;
@@ -238,18 +186,11 @@ async function handleLogin() {
   border: none;
 }
 
-.register-link {
+.login-tip {
   text-align: center;
-  margin-top: 20px;
-  font-size: 14px;
-}
-
-.register-link a {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-.register-link a:hover {
-  color: var(--color-primary-hover);
+  margin-top: 16px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--color-text-tertiary);
 }
 </style>

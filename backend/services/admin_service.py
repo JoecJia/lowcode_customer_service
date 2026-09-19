@@ -16,8 +16,9 @@ def list_accounts(search: str = "", offset: int = 0, limit: int = 20) -> tuple[l
     with get_db() as conn:
         conn.row_factory = sqlite3.Row
         if search:
-            where = "WHERE username LIKE ?"
-            params = (f"%{search}%",)
+            # 登录已切换为超星 passport，username 存的是 uid，因此同时支持按姓名 / UID 搜索
+            where = "WHERE username LIKE ? OR realname LIKE ? OR uid LIKE ?"
+            params = (f"%{search}%",) * 3
         else:
             where = ""
             params = ()
@@ -28,7 +29,7 @@ def list_accounts(search: str = "", offset: int = 0, limit: int = 20) -> tuple[l
         total = count_row["cnt"] if count_row else 0
 
         rows = conn.execute(
-            f"""SELECT id, username, can_chat, can_admin, created_at
+            f"""SELECT id, username, uid, fid, realname, can_chat, can_admin, created_at
                 FROM users {where}
                 ORDER BY id ASC
                 LIMIT ? OFFSET ?""",
@@ -39,6 +40,9 @@ def list_accounts(search: str = "", offset: int = 0, limit: int = 20) -> tuple[l
         {
             "id": r["id"],
             "username": r["username"],
+            "uid": r["uid"] or "",
+            "fid": r["fid"] or "",
+            "realname": r["realname"] or "",
             "can_chat": r["can_chat"] or 0,
             "can_admin": r["can_admin"] or 0,
             "created_at": r["created_at"],

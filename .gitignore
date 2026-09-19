@@ -41,6 +41,7 @@ agent_config/data/
 
 # IDE / Config
 .trae/
+.codebuddy/
 venv/
 
 # Frontend

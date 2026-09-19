@@ -38,6 +38,9 @@ def _init_db() -> None:
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 username    TEXT    NOT NULL UNIQUE,
                 password    TEXT    NOT NULL,
+                uid         TEXT,
+                fid         TEXT,
+                realname    TEXT    DEFAULT '',
                 role        TEXT    DEFAULT 'user',
                 avatar      TEXT    DEFAULT '',
                 can_chat    INTEGER DEFAULT 1,
@@ -47,6 +50,9 @@ def _init_db() -> None:
             );
 
             CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+            -- 注意：idx_users_uid 必须放在 _run_migrations() 里创建。
+            -- 老库的 users 表已存在，CREATE TABLE IF NOT EXISTS 不会补 uid 列，
+            -- 此处直接建索引会报 "no such column: uid"。
 
             CREATE TABLE IF NOT EXISTS sessions (
                 id          TEXT PRIMARY KEY,
@@ -101,6 +107,10 @@ def _run_migrations() -> None:
         # users 表补列
         ("users", "can_chat", "INTEGER DEFAULT 1"),
         ("users", "can_admin", "INTEGER DEFAULT 0"),
+        # users 表补列（超星 passport 登录）
+        ("users", "uid", "TEXT"),
+        ("users", "fid", "TEXT"),
+        ("users", "realname", "TEXT DEFAULT ''"),
     ]
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -116,6 +126,7 @@ def _run_migrations() -> None:
             "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_user_deleted ON sessions(user_id, deleted_at)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_uid ON users(uid)",
         ]
         for sql in index_sql:
             try:

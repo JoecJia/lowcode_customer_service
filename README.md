@@ -9,7 +9,7 @@
 | 前端 | Vue 3 + TypeScript + Element Plus + Vite |
 | 后端 | FastAPI + Uvicorn (Python 异步) |
 | 数据库 | SQLite |
-| 鉴权 | JWT (HS256) + bcrypt |
+| 鉴权 | 超星 Passport Cookie 免登（VC3 验签）+ 本地 JWT (HS256, 1 天) |
 | AI 大模型 | 豆包 Doubao-Seed-2.0-pro (火山引擎 Ark) |
 | 向量检索 | FAISS + BM25 (jieba 分词) |
 | Embedding | BAAI/bge-small-zh-v1.5 (512 维) |
@@ -31,23 +31,25 @@ ARK_API_KEY=your_volcengine_api_key
 # 可选
 SESSION_TTL_SECONDS=1800
 DB_PATH=backend/data/app.db
-JWT_SECRET=your_secret_key
+JWT_SECRET=your_secret_key   # 生产环境务必替换为随机串
 DEBUG=1
+
+# 超星 Passport 登录（详见下方「登录说明」）
+PASSPORT_BASE_URL=https://passport2-api.chaoxing.com/
+PASSPORT_LOGIN_URL=https://passport2.chaoxing.com/login
+PASSPORT_APP_ID=...
+PASSPORT_APP_KEY=...            # 生产环境签名私钥
+PASSPORT_APP_KEY_DEBUG=...      # 开发环境（VPN / 办公区 IP）签名私钥
+PASSPORT_KEY_MODE=prod          # prod | debug
+PASSPORT_API_USERINFO_KEY=...
+PASSPORT_VC3_AES_KEY=...
+PASSPORT_MD5_KEY=...
+PASSPORT_SIMULATE_MD5_KEY=...
+PASSPORT_FORWARD_CLIENT_INFO=true
+APP_ORIGINS=https://service.cxlowcode.com
 ```
 
-### 2. 一键启动 (Windows)
-
-```powershell
-.\windows_start.bat
-```
-
-或
-
-```powershell
-.\windows_start.ps1
-```
-
-### 3. 手动启动
+### 2. 手动启动
 
 ```bash
 # 后端
@@ -60,12 +62,29 @@ cd frontend && npm install && npm run dev   # → http://localhost:5173
 
 开发模式下，前端 Vite 代理自动将 `/api`、`/health`、`/assets` 转发到后端 `:8000`。
 
-### 4. 生产部署
+### 3. 生产部署
 
 ```bash
 cd frontend && npm run build     # 输出到 frontend/dist/
 python backend/main.py           # 后端托管前端静态文件 → http://localhost:8000
 ```
+
+### 4. 登录说明（超星 Passport 免登）
+
+本系统不再提供自建账号密码登录，统一使用超星 passport 登录态：
+
+1. **前置条件**：浏览器需已登录超星，且 passport Cookie 的 `Domain` 覆盖部署域名
+   （生产为 `https://service.cxlowcode.com`，要求 Cookie 域为 `.cxlowcode.com`）。
+2. **访问系统**：已登录超星时自动进入对话页，无需任何输入；未登录时点击「使用超星账号登录」跳转超星登录页（`?refer=` 回跳本站）。
+3. **调试自检**：`python debug/passport_selfcheck.py` 可实测接口域名、签名私钥与 Cookie 验签；
+   带上真实 Cookie 可验证整条验签链路：`python debug/passport_selfcheck.py --cookie "UID=..; fid=..; vc3=..; _d=.."`。
+4. **首个管理员**：用超星账号登录一次后执行
+   `UPDATE users SET can_admin = 1 WHERE uid = '<你的uid>';`（库文件 `backend/data/app.db`）。
+5. **本地联调**：把 `service.cxlowcode.com` 指向本地（`C:\Windows\System32\drivers\etc\hosts` 加
+   `127.0.0.1 service.cxlowcode.com`，再 `ipconfig /flushdns`）。Cookie 按域名匹配、忽略端口，
+   因此 `:5173` 同样生效；若 passport Cookie 带 `Secure` 标记，本地需启用 HTTPS。
+6. **签名私钥**：`PASSPORT_KEY_MODE=debug` 用于办公区 / VPN 环境，公网生产环境必须为 `prod`，
+   否则 passport 会返回「signature 校验未通过，办公区 ip、VPN ip 请使用 debugKey」。
 
 ## 功能模块
 
@@ -82,8 +101,10 @@ python backend/main.py           # 后端托管前端静态文件 → http://loc
 - 用户反馈管理与处理
 
 ### 用户系统
-- 注册 / 登录
-- JWT Token 鉴权
+- 超星 Passport Cookie 免登：与 passport 同域，浏览器自动携带 `UID` / `fid` / `vc3` / `_d`
+- VC3 验签（MD5 尾校验 + `SHA256withRSA`，正式 → 模拟两轮）后签发本地 JWT（有效期 1 天）
+- 未登录时引导跳转超星登录页（`?refer=` 回跳本站）
+- 退出登录：只清本地登录态并写入标志位，刷新不会被自动登录回来
 
 ## AI Agent 架构
 
@@ -151,9 +172,10 @@ Agent 定义在 `agent_config/agent.md`，工作流如下：
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/register` | 注册 |
-| POST | `/api/login` | 登录 (返回 JWT) |
+| POST | `/api/passport/cookie/login` | 用超星 Cookie 换取本地 JWT（带 token 走快路径） |
 | GET | `/api/me` | 当前用户信息 |
+
+> 原 `/api/register`、`/api/login` 已随账号密码体系下线。
 
 ### 反馈 & 管理
 

@@ -16,12 +16,6 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
-      path: '/register',
-      name: 'register',
-      component: () => import('../views/RegisterView.vue'),
-      meta: { guest: true },
-    },
-    {
       path: '/admin/login',
       name: 'adminLogin',
       component: () => import('../views/admin/AdminLoginView.vue'),
@@ -72,20 +66,16 @@ router.beforeEach((to, _from, next) => {
     return next()
   }
 
-  // ===== 用户前台路由（已有逻辑） =====
-  const token = authToken
-
+  // ===== 用户前台路由 =====
   if (to.meta.guest) {
-    if (token) {
+    if (authToken) {
       return next('/')
     }
     return next()
   }
 
-  if (to.meta.requiresAuth) {
-    if (!token) {
-      return next('/login')
-    }
+  if (to.meta.requiresAuth && !authToken) {
+    return next('/login')
   }
 
   next()
