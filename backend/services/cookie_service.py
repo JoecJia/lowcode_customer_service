@@ -10,10 +10,12 @@ Cookie 四要素名称大小写敏感：``UID`` / ``fid`` / ``vc3`` / ``_d``。
 
 from __future__ import annotations
 
-from typing import Optional
+import sys
+from typing import Any, Optional
 
 from fastapi import Request
 
+from config import DEBUG
 from services.passport_crypto import decode_url
 from services.passport_service import is_login_passport
 
@@ -21,6 +23,11 @@ COOKIE_NAME_UID = "UID"
 COOKIE_NAME_FID = "fid"
 COOKIE_NAME_VC3 = "vc3"
 COOKIE_NAME_TIME = "_d"
+
+
+def _debug(*args: Any) -> None:
+    if DEBUG:
+        print("[passport-cookie]", *args, file=sys.stderr)
 
 
 def _raw(request: Request, name: str) -> str:
@@ -45,6 +52,25 @@ async def verify_passport_cookie(request: Request) -> Optional[dict]:
     fid = _raw(request, COOKIE_NAME_FID)
     vc3 = _raw(request, COOKIE_NAME_VC3)
     login_time = _raw(request, COOKIE_NAME_TIME)
+
+    # 诊断：只打印长度与来源 Host，不泄露 Cookie 内容
+    _debug(
+        "host=", request.headers.get("host"),
+        "| Cookie 长度:",
+        {
+            COOKIE_NAME_UID: len(uid),
+            COOKIE_NAME_FID: len(fid),
+            COOKIE_NAME_VC3: len(vc3),
+            COOKIE_NAME_TIME: len(login_time),
+        },
+    )
+
+    # 与参考实现一致：验签只依赖 UID / vc3 / _d，fid 缺失不阻断（按空值继续）
+    if not uid or not vc3 or not login_time:
+        _debug("Cookie 关键三要素(UID/vc3/_d)不完整，直接判定未登录")
+        return None
+    if not fid:
+        _debug("Cookie 缺少 fid，按空值继续")
 
     if not await is_login_passport(uid, vc3, login_time):
         return None
