@@ -1,9 +1,5 @@
 const BASE = '/api'
 
-/** 超星登录页地址（可用 VITE_PASSPORT_LOGIN_URL 覆盖） */
-const PASSPORT_LOGIN_URL =
-  import.meta.env.VITE_PASSPORT_LOGIN_URL || 'https://passport2.chaoxing.com/login'
-
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('auth_token')
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -27,27 +23,17 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   return resp
 }
 
-/**
- * 构造超星登录页跳转地址。
- *
- * `refer` 只取本站 origin，不接受外部传入的任意地址，避免开放重定向。
- */
-export function buildPassportLoginUrl(): string {
-  const refer = `${window.location.origin}/`
-  return `${PASSPORT_LOGIN_URL}?refer=${encodeURIComponent(refer)}`
+export async function login(username: string, password: string) {
+  return authFetch(`${BASE}/login`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
 }
 
-/**
- * 用浏览器携带的超星 Cookie 换取本系统 JWT。
- *
- * 注意：这里**不使用** authFetch —— 未登录超星时返回 401 是预期结果，
- * 不能触发 authFetch 的「清 token 并跳登录页」逻辑。
- */
-export async function passportLogin(): Promise<Response> {
-  return fetch(`${BASE}/passport/cookie/login`, {
+export async function register(username: string, password: string) {
+  return authFetch(`${BASE}/register`, {
     method: 'POST',
-    credentials: 'include',
-    headers: getAuthHeaders(),
+    body: JSON.stringify({ username, password }),
   })
 }
 
