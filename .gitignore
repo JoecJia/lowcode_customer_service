@@ -46,3 +46,6 @@ venv/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Local reference materials (passport integration, not versioned)
+对接passport资料/

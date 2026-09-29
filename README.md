@@ -35,19 +35,7 @@ JWT_SECRET=your_secret_key
 DEBUG=1
 ```
 
-### 2. 一键启动 (Windows)
-
-```powershell
-.\windows_start.bat
-```
-
-或
-
-```powershell
-.\windows_start.ps1
-```
-
-### 3. 手动启动
+### 2. 手动启动
 
 ```bash
 # 后端
@@ -60,7 +48,7 @@ cd frontend && npm install && npm run dev   # → http://localhost:5173
 
 开发模式下，前端 Vite 代理自动将 `/api`、`/health`、`/assets` 转发到后端 `:8000`。
 
-### 4. 生产部署
+### 3. 生产部署
 
 ```bash
 cd frontend && npm run build     # 输出到 frontend/dist/
