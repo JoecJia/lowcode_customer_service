@@ -60,6 +60,9 @@ chmod +x linux_start.sh
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+> `--reload` 仅供开发使用：文件变动会重启 worker，并重复执行约 11 秒的检索预热。
+> **生产环境请去掉该参数**（参见下方 systemd 配置，其 ExecStart 不带 --reload）。
+
 **终端 2 - 启动前端：**
 
 ```bash
@@ -85,12 +88,43 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 | 管理后台 | http://localhost:5173/admin |
 | 后端 API | http://localhost:8000 |
 | 健康检查 | http://localhost:8000/health |
+| 就绪检查 | http://localhost:8000/ready |
 
 ## 常见问题
 
-### 首次启动下载模型慢
+### 向量检索模型需要预先下载（重要）
 
-首次启动时 `sentence-transformers` 会自动下载 BGE 中文向量模型（约 400MB）。已配置 `HF_ENDPOINT=https://hf-mirror.com` 国内镜像加速。
+向量检索使用 `BAAI/bge-small-zh-v1.5`，代码以**强制离线模式**加载
+（`SentenceTransformer(model_name, local_files_only=True)`），**不会自动联网下载**。
+
+缓存缺失时会静默降级：`HybridSearcher` 吞掉异常并把向量通道置空，
+混合检索退化为**纯 BM25 关键词匹配**，而 `ready` 仍然返回 `True`。
+线上表现为「检索不准 → 模型反复更换关键词重试 → 轮次变多、响应明显变慢」，
+很难从日志上直接看出来。
+
+**首次部署时必须执行一次下载**（脚本已内置 hf-mirror 镜像）：
+
+```bash
+python debug/download_embedding_model.py
+```
+
+模型缓存在 `~/.cache/huggingface/hub/`，**不随代码包分发**，
+因此每台新服务器首次部署都需要跑一次。
+
+验证方式：
+
+```bash
+curl http://localhost:8000/ready
+```
+
+- `{"status":"ok","vector_ready":true,...}` → 向量通道可用
+- `503 {"status":"degraded","vector_ready":false,...}` → 向量检索已降级，需按上述步骤补模型
+
+启动日志中出现下面这行也说明预热成功：
+
+```
+[startup] 知识检索预热完成：ready=True 耗时 11186ms
+```
 
 ### 知识库搜索无结果
 
@@ -274,8 +308,18 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                    sleep 5
-                    curl -f http://${DEPLOY_HOST}:8000/health || exit 1
+                    # 服务启动时会预热检索链路（加载 embedding 模型与 FAISS 索引，约 11 秒），
+                    # 期间端口还未就绪，因此必须轮询而不是固定 sleep。
+                    # 用 /ready 而非 /health：前者会校验向量通道，降级时返回 503。
+                    for i in $(seq 1 30); do
+                        if curl -sf http://${DEPLOY_HOST}:8000/ready > /dev/null; then
+                            echo "service ready after ${i} attempt(s)"
+                            exit 0
+                        fi
+                        sleep 2
+                    done
+                    echo "service not ready within 60s"
+                    exit 1
                 '''
             }
         }
@@ -328,6 +372,10 @@ sudo apt install -y python3 python3-pip python3-venv nodejs npm curl
 cd $DEPLOY_PATH/backend
 pip3 install -r requirements.txt
 cd $DEPLOY_PATH
+
+# 预置向量检索模型（代码为离线加载，不会自动下载；缺失会导致向量检索静默降级）
+# 已缓存过可重复执行，脚本会直接命中本地缓存
+python3 debug/download_embedding_model.py
 
 # 安装 Node 依赖并构建前端
 cd $DEPLOY_PATH/frontend

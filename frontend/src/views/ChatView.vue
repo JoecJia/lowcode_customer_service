@@ -18,7 +18,16 @@ import { useAuth } from '../composables/useAuth'
 const { currentUser, logout } = useAuth()
 
 // ==================== DEBUG 开关 ====================
-const DEBUG_STREAM = true
+// 与 api/chat.ts 保持一致：逐 token 日志默认关闭。
+// 开启方式：控制台执行 localStorage.setItem('chat_debug', '1') 后刷新页面。
+function readDebugFlag(): boolean {
+  try {
+    return localStorage.getItem('chat_debug') === '1'
+  } catch {
+    return false
+  }
+}
+const DEBUG_STREAM = import.meta.env.DEV && readDebugFlag()
 
 // ==================== 侧边栏状态 ====================
 const sessions = ref<Session[]>([])
@@ -123,9 +132,17 @@ interface UIMessage {
   created_at?: number
   /** 节流后的 markdown 渲染 HTML，流式期间每 150ms 更新一次，防止图片闪动 */
   _renderedHtml?: string
+  /** 节流后的思考文本（已剔除 think 标记），避免模板对每个 token 重复跑全文正则 */
+  _cleanReasoning?: string
 }
 
 // ==================== 工具函数 ====================
+
+// 流式渲染期间不产出 <img>：_renderedHtml 每 150ms 被整体替换（v-html 是全量重建），
+// 若期间渲染出图片，每个 <img> 每 150ms 就被销毁重建一次、重新发起请求
+// （实测同一次回答中同一张图被重复请求数十次）。
+// 流式结束后（isStreaming=false）再完整渲染，此时每张图只请求一次。
+let _streamingRender = false
 
 // 自定义 marked 渲染器：将相对路径的图片 src 转为服务端绝对路径
 const markedRenderer = new marked.Renderer()
@@ -135,6 +152,10 @@ markedRenderer.image = function (token: any): string {
   // ../assets/xxx → /assets/xxx  （兜底修正，防止 LLM 输出的相对路径图片显示为裂图）
   if (href.startsWith('../assets/') || href.includes('/../assets/')) {
     token.href = href.replace(/(?:\.\.\/)+assets\//g, '/assets/')
+  }
+  if (_streamingRender) {
+    // 流式期间用占位文本代替图片，避免反复重建 <img>
+    return `<span class="img-stream-placeholder">[图片${token.text ? '：' + token.text : ''}]</span>`
   }
   return originalImageRenderer(token)
 }
@@ -150,10 +171,23 @@ function renderMarkdown(text: string): string {
 const RENDER_THROTTLE_MS = 150
 const _renderTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
 
+function syncDerived(msg: UIMessage) {
+  // 流式期间禁用图片渲染，避免每 150ms 重建 <img> 导致图片被反复请求
+  _streamingRender = !!msg.isStreaming
+  try {
+    msg._renderedHtml = renderMarkdown(msg.content)
+  } finally {
+    _streamingRender = false
+  }
+  // 思考文本的清洗（两次全文正则 + trim）一并节流：
+  // 否则模板里的 cleanReasoning() 会在每个 token 上对全文重算，整体复杂度 O(n²)
+  msg._cleanReasoning = msg.reasoning ? cleanReasoning(msg.reasoning) : ''
+}
+
 function scheduleRender(msg: UIMessage) {
   if (!msg.isStreaming) {
     // 非流式（已完成/历史消息/出错）：立即渲染
-    msg._renderedHtml = renderMarkdown(msg.content)
+    syncDerived(msg)
     return
   }
 
@@ -162,7 +196,7 @@ function scheduleRender(msg: UIMessage) {
 
   _renderTimers.set(msg, setTimeout(() => {
     _renderTimers.delete(msg)
-    msg._renderedHtml = renderMarkdown(msg.content)
+    syncDerived(msg)
   }, RENDER_THROTTLE_MS))
 }
 
@@ -317,6 +351,8 @@ async function sendMessage() {
     isStreaming: true,
   })
   messages.value.push(assistantMsg)
+  // 新消息会生成新的思考区 DOM，重置缓存的滚动目标
+  _thinkingContentEl = null
 
   isStreaming.value = true
 
@@ -332,20 +368,13 @@ async function sendMessage() {
       }
       assistantMsg.content += content
       scheduleRender(assistantMsg)
-      if (DEBUG_STREAM) {
-        const preview = content.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onContent +="${preview}" total=${assistantMsg.content.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
+      scheduleStreamScroll()
     },
     (reasoning) => {
       assistantMsg.reasoning = (assistantMsg.reasoning || '') + reasoning
-      if (DEBUG_STREAM) {
-        const preview = reasoning.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onReasoning +="${preview}" total=${assistantMsg.reasoning!.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
-      scrollThinkingContentToBottom()
+      // 思考文本也走节流渲染（_cleanReasoning 在 syncDerived 内更新）
+      scheduleRender(assistantMsg)
+      scheduleStreamScroll()
     },
     (type: string, result: string) => {
       if (!assistantMsg.tasks) assistantMsg.tasks = []
@@ -411,20 +440,12 @@ async function handleRegenerate(msg: UIMessage) {
       }
       msg.content += content
       scheduleRender(msg)
-      if (DEBUG_STREAM) {
-        const preview = content.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onContent(regenerate) +="${preview}" total=${msg.content.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
+      scheduleStreamScroll()
     },
     (reasoning) => {
       msg.reasoning = (msg.reasoning || '') + reasoning
-      if (DEBUG_STREAM) {
-        const preview = reasoning.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onReasoning(regenerate) +="${preview}" total=${msg.reasoning!.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
-      scrollThinkingContentToBottom()
+      scheduleRender(msg)
+      scheduleStreamScroll()
     },
     (type: string, result: string) => {
       if (!msg.tasks) msg.tasks = []
@@ -618,14 +639,35 @@ async function scrollToBottom() {
   }
 }
 
-/** 将当前流式消息的思考过程内容区滚动到底部 */
-function scrollThinkingContentToBottom() {
-  nextTick(() => {
-    // 找到最后一个 assistant 消息中的 .thinking-content（即当前正在流式的消息）
-    const contents = messageArea.value?.querySelectorAll('.thinking-content')
-    if (contents && contents.length > 0) {
-      const el = contents[contents.length - 1] as HTMLElement
-      el.scrollTop = el.scrollHeight
+/**
+ * 流式期间的高频滚动节流。
+ *
+ * 原先每个 token 都会执行一次「读 scrollHeight + 写 scrollTop」，属于强制同步布局
+ * （layout thrashing），并且每次都 querySelectorAll 遍历 DOM 找 .thinking-content，
+ * 开销随会话长度（消息数、图片数）增长——这是「聊得越久越卡」的主因。
+ * 现在统一收敛为每帧最多一次，并缓存思考区元素，避免重复查询。
+ */
+let _streamScrollScheduled = false
+let _thinkingContentEl: HTMLElement | null = null
+
+function scheduleStreamScroll() {
+  if (_streamScrollScheduled) return
+  _streamScrollScheduled = true
+  requestAnimationFrame(() => {
+    _streamScrollScheduled = false
+
+    // 1) 消息区跟随底部
+    if (userAtBottom.value && messageArea.value) {
+      messageArea.value.scrollTop = messageArea.value.scrollHeight
+    }
+
+    // 2) 思考过程内容区跟随底部（缓存元素；消息重建后自动重新查询）
+    if (!_thinkingContentEl || !_thinkingContentEl.isConnected) {
+      const list = messageArea.value?.querySelectorAll('.thinking-content')
+      _thinkingContentEl = list && list.length > 0 ? (list[list.length - 1] as HTMLElement) : null
+    }
+    if (_thinkingContentEl) {
+      _thinkingContentEl.scrollTop = _thinkingContentEl.scrollHeight
     }
   })
 }
@@ -926,7 +968,7 @@ onBeforeUnmount(() => {
                       </div>
                     </template>
                     <!-- 大模型思考推理过程 -->
-                    <div v-if="msg.reasoning" class="reasoning-text">{{ cleanReasoning(msg.reasoning) }}</div>
+                    <div v-if="msg.reasoning" class="reasoning-text">{{ msg._cleanReasoning ?? cleanReasoning(msg.reasoning) }}</div>
                     <!-- 占位：等待思考内容 -->
                     <div v-if="msg.isStreaming && !msg.reasoning && (!msg.tasks || msg.tasks.length === 0)" class="thinking-placeholder">
                       正在分析...

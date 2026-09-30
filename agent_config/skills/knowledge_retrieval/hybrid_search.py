@@ -34,6 +34,14 @@ class BM25Retriever:
         self._tokenized = [_tokenize(doc) for doc in self._corpus]
         self._bm25 = BM25Okapi(self._tokenized, k1=BM25_K1, b=BM25_B) if self._tokenized else None
 
+    @property
+    def ready(self) -> bool:
+        return self._bm25 is not None and bool(self._chunks)
+
+    @property
+    def chunk_count(self) -> int:
+        return len(self._chunks)
+
     def search(self, query: str, top_k: int = BM25_TOP_K) -> list[tuple[int, float]]:
         if self._bm25 is None:
             return []
@@ -64,7 +72,17 @@ class VectorRetriever:
 
     @property
     def ready(self) -> bool:
+        # 保持既有语义：索引加载成功即视为可用（向量通道失效时仍可退回 BM25）
         return self._loaded
+
+    @property
+    def vector_ready(self) -> bool:
+        """向量通道是否真正可用：索引与 embedding 模型都已就绪。
+
+        注意 vector_ready=False 时 search() 会静默返回空，混合检索实际只跑 BM25。
+        这种情况通常意味着 embedding 模型不在本地缓存，用 /ready 可以提前发现。
+        """
+        return self._loaded and self._embedder is not None
 
     def search(self, query: str, top_k: int = VECTOR_TOP_K) -> list[tuple[int, float]]:
         if not self._loaded or self._meta is None or self._embedder is None:
@@ -105,6 +123,14 @@ class HybridSearcher:
     def ready(self) -> bool:
         return self._vector.ready
 
+    def status(self) -> dict:
+        """检索链路状态，供 /ready 就绪检查使用。"""
+        return {
+            "bm25_ready": self._bm25.ready,
+            "vector_ready": self._vector.vector_ready,
+            "chunks": self._bm25.chunk_count,
+        }
+
     def search(self, query: str, top_k: int = 5) -> list[dict]:
         if not query.strip():
             return []
@@ -139,6 +165,36 @@ def _get_searcher() -> HybridSearcher:
 def refresh_searcher() -> None:
     global _searcher
     _searcher = None
+
+
+def prewarm() -> bool:
+    """预热检索链路：构建检索器单例，并空跑一次检索。
+
+    构造过程加载 BM25 语料、FAISS 索引与 embedding 模型（实测约 11 秒）；
+    空跑一次是为了触发 PyTorch 首次前向与 FAISS 首次寻址——否则这段冷成本
+    会落在首个用户请求上（实测约 2 秒）。
+    """
+    searcher = _get_searcher()
+    if searcher.ready:
+        try:
+            searcher.search("预热检索", top_k=1)
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+    return searcher.ready
+
+
+def status() -> dict:
+    """返回检索链路状态；未初始化时不会触发构建（避免就绪检查反而拉高延迟）。"""
+    if _searcher is None:
+        return {
+            "initialized": False,
+            "bm25_ready": False,
+            "vector_ready": False,
+            "chunks": 0,
+        }
+    return {"initialized": True, **_searcher.status()}
 
 
 def retrieve(query: str, top_k: int = 3) -> dict:

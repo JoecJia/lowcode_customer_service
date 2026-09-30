@@ -33,7 +33,18 @@ export interface ListMessagesResponse {
 const BASE = '/api'
 
 // ==================== DEBUG 开关 ====================
-const DEBUG_STREAM = true
+// 逐 token 日志默认关闭：每个 token 都要做字符串切片 + console 调用，
+// DevTools 打开时开销尤其明显（会直接拖慢流式观感）。
+// 需要排查流式问题时，在浏览器控制台执行：
+//   localStorage.setItem('chat_debug', '1')  然后刷新页面
+function readDebugFlag(): boolean {
+  try {
+    return localStorage.getItem('chat_debug') === '1'
+  } catch {
+    return false
+  }
+}
+const DEBUG_STREAM = import.meta.env.DEV && readDebugFlag()
 
 export async function listSessions(
   limit: number = 10,
@@ -95,22 +106,6 @@ export async function submitFeedback(sessionId: string): Promise<{ ok: boolean; 
 export async function checkFeedback(sessionId: string): Promise<{ has_feedback: boolean }> {
   const resp = await authFetch(`${BASE}/feedback/check?session_id=${sessionId}`)
   return await resp.json()
-}
-
-/**
- * 强制浏览器渲染一帧。
- * 先通过 setTimeout(0) 让出到 macrotask 队列（Vue 的微任务刷新得以执行），
- * 再通过 requestAnimationFrame 等待浏览器完成绘制帧，
- * 确保页面呈现「逐 token 弹出」的流式效果。
- */
-function forceRenderFrame(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => resolve())
-      })
-    }, 0)
-  })
 }
 
 export function streamChat(
@@ -240,14 +235,12 @@ export function streamChat(
 
       for (const line of lines) {
         if (line === '') {
-          const eventType = flushEvent()
-          // content / reasoning 事件后强制渲染一帧，保证逐 token 流式显示
-          if (eventType === 'content' || eventType === 'reasoning') {
-            if (DEBUG_STREAM) {
-              console.debug(`[SSE] ⏸️  yield frame after ${eventType}`)
-            }
-            await forceRenderFrame()
-          }
+          // 这里曾对每个 content/reasoning 事件 await 两帧渲染（约 33ms），
+          // 目的是营造「逐 token 弹出」效果。副作用是：豆包按单字符增量推送，
+          // 于是每字都阻塞一次，把可见速率钉在约 30 字/秒（后端实测 100+ 字/秒），
+          // 同时卡住 reader.read() 造成网络反压，后台标签页还会因 rAF 暂停而假死。
+          // Vue 的响应式更新本身会按微任务/帧批处理，直接放行即可保持流式观感。
+          flushEvent()
         } else {
           eventLines.push(line)
         }
