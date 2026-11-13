@@ -1,0 +1,869 @@
+{
+  "version": 2,
+  "created_at": "2026-11-10",
+  "updated_at": "2026-11-10",
+  "changelog": "v2: 46 -> 102 条，补充数据工厂/表单细节/审批/图表/字段默认值覆盖与工单改写题；单条样本权重由 2.2pp 降至 1.0pp",
+  "notes": "检索评测集。expected_files 为可接受来源文件（允许多个，覆盖文档重叠的情况）；answer_keywords 用于校验标注有效性与内容级命中率。新增/删除知识库文档后需同步维护本文件，并跑 evaluate.py --validate。",
+  "queries": [
+    {
+      "id": "faq-01",
+      "category": "faq",
+      "query": "附件上传单个文件最大能传多大",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["2G"]
+    },
+    {
+      "id": "faq-02",
+      "category": "faq",
+      "query": "后台怎么导出没有脱敏的明文数据",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["数据脱敏显示"]
+    },
+    {
+      "id": "faq-03",
+      "category": "faq",
+      "query": "表单设置了免登录，为什么打开链接还是要登录学习通",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["不需要登录"]
+    },
+    {
+      "id": "faq-04",
+      "category": "faq",
+      "query": "批量导入表单数据时能不能校验配置的规则",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["需要校验项"]
+    },
+    {
+      "id": "faq-05",
+      "category": "faq",
+      "query": "怎么校验表单里多个字段的组合值是否重复",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["不允许重复值"]
+    },
+    {
+      "id": "faq-06",
+      "category": "faq",
+      "query": "表单数据怎么同步给第三方系统",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["表单数据推送"]
+    },
+    {
+      "id": "faq-07",
+      "category": "faq",
+      "query": "数据工厂怎么开通",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["产品开通审批表"]
+    },
+    {
+      "id": "faq-08",
+      "category": "faq",
+      "query": "表单提示数据计算中请勿离开页面是什么原因",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["未计算完成"]
+    },
+    {
+      "id": "faq-09",
+      "category": "faq",
+      "query": "怎么把数组里的内容拆分到子表单中",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["拆分至子表单"]
+    },
+    {
+      "id": "faq-10",
+      "category": "faq",
+      "query": "数据工厂汇总出来的数据怎么点击查看原始明细",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["多行合并"]
+    },
+
+    {
+      "id": "logic-01",
+      "category": "field_defaults",
+      "query": "下拉框字段的默认值可以配置哪些内容",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["下拉框"]
+    },
+    {
+      "id": "logic-02",
+      "category": "field_defaults",
+      "query": "自动编号字段的默认值怎么设置",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["自动编号"]
+    },
+    {
+      "id": "logic-03",
+      "category": "field_defaults",
+      "query": "日期区间字段的默认值有哪些规则",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["日期区间"]
+    },
+    {
+      "id": "logic-04",
+      "category": "field_defaults",
+      "query": "手写签名字段支持默认值吗",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["手写签名"]
+    },
+
+    {
+      "id": "formula-01",
+      "category": "formula",
+      "query": "公式编辑的触发条件有哪些",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/product_docs/formula_guide.md"],
+      "answer_keywords": ["触发条件"]
+    },
+    {
+      "id": "formula-02",
+      "category": "formula",
+      "query": "公式里有哪些数学函数和文本函数",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/product_docs/formula_guide.md"],
+      "answer_keywords": ["数学函数"]
+    },
+    {
+      "id": "formula-03",
+      "category": "formula",
+      "query": "写公式的时候需要注意什么",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/formula_guide.md"],
+      "answer_keywords": ["注意事项"]
+    },
+
+    {
+      "id": "iq-01",
+      "category": "info_query",
+      "query": "信息查询项目怎么配置查询条件",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/info_query_guide.md"],
+      "answer_keywords": ["查询条件"]
+    },
+    {
+      "id": "iq-02",
+      "category": "info_query",
+      "query": "信息查询功能适合用在什么场景",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/info_query_guide.md"],
+      "answer_keywords": ["使用场景"]
+    },
+    {
+      "id": "iq-03",
+      "category": "info_query",
+      "query": "信息查询的查询结果页能做什么",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/info_query_guide.md"],
+      "answer_keywords": ["查询结果"]
+    },
+
+    {
+      "id": "agg-01",
+      "category": "aggregation",
+      "query": "聚合表的行表头怎么配置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/aggregation_table.md"],
+      "answer_keywords": ["行表头"]
+    },
+    {
+      "id": "agg-02",
+      "category": "aggregation",
+      "query": "聚合表的校验事件怎么选择",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/aggregation_table.md"],
+      "answer_keywords": ["校验事件"]
+    },
+    {
+      "id": "agg-03",
+      "category": "aggregation",
+      "query": "聚合表怎么被其他表单引用",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/aggregation_table.md"],
+      "answer_keywords": ["引用"]
+    },
+
+    {
+      "id": "chart-01",
+      "category": "chart",
+      "query": "图表引擎的数据源怎么设置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/chart_engine_guide.md"],
+      "answer_keywords": ["数据源"]
+    },
+    {
+      "id": "chart-02",
+      "category": "chart",
+      "query": "仪表盘怎么设置",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/product_docs/chart_engine_guide.md"],
+      "answer_keywords": ["仪表盘"]
+    },
+
+    {
+      "id": "bp-01",
+      "category": "biz_process",
+      "query": "业务流程怎么创建并发布",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/business_process_management.md"],
+      "answer_keywords": ["创建并发布"]
+    },
+    {
+      "id": "bp-02",
+      "category": "biz_process",
+      "query": "连通器管理平台是干什么的",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/business_process_management.md"],
+      "answer_keywords": ["连通器"]
+    },
+    {
+      "id": "bp-03",
+      "category": "biz_process",
+      "query": "运行业务流程时有哪些常见问题",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/business_process_management.md"],
+      "answer_keywords": ["常见问题"]
+    },
+
+    {
+      "id": "ap-01",
+      "category": "approval",
+      "query": "审批的显隐规则怎么配置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["显隐规则"]
+    },
+    {
+      "id": "ap-02",
+      "category": "approval",
+      "query": "审批可以从哪几个入口创建",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["创建入口"]
+    },
+    {
+      "id": "ap-03",
+      "category": "approval",
+      "query": "审批怎么绑定组织架构",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["绑定组织架构"]
+    },
+    {
+      "id": "ap-04",
+      "category": "approval",
+      "query": "审批表单里被隐藏的字段会参与运算吗",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["隐藏字段参与运算"]
+    },
+    {
+      "id": "ap-05",
+      "category": "approval",
+      "query": "审批怎么设置区域架构",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["区域架构"]
+    },
+
+    {
+      "id": "form-01",
+      "category": "form",
+      "query": "表单字段的必填项在哪里设置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["必填"]
+    },
+    {
+      "id": "form-02",
+      "category": "form",
+      "query": "表单里的子表单怎么使用",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["子表单"]
+    },
+    {
+      "id": "form-03",
+      "category": "form",
+      "query": "表单的权限怎么设置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["权限"]
+    },
+    {
+      "id": "form-04",
+      "category": "form",
+      "query": "表单字段的默认值怎么配置",
+      "difficulty": "medium",
+      "expected_files": [
+        "agent_config/context/product_docs/form_usage_guide.md",
+        "agent_config/context/logic/form-field-default-values.md"
+      ],
+      "answer_keywords": ["默认值"]
+    },
+
+    {
+      "id": "intro-01",
+      "category": "intro",
+      "query": "超星低代码平台包含哪些产品",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/product_docs/product_intro.md"],
+      "answer_keywords": ["表单引擎"]
+    },
+
+    {
+      "id": "lr-01",
+      "category": "learning",
+      "query": "有没有表单入门的短视频课程",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/learning_resources_summary.md"],
+      "answer_keywords": ["短视频"]
+    },
+    {
+      "id": "lr-02",
+      "category": "learning",
+      "query": "低代码平台的培训会议资料在哪里找",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/learning_resources_summary.md"],
+      "answer_keywords": ["培训"]
+    },
+
+    {
+      "id": "para-01",
+      "category": "paraphrase",
+      "query": "外部人员不注册账号也能直接提交表单，怎么实现",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["免登录"]
+    },
+    {
+      "id": "para-02",
+      "category": "paraphrase",
+      "query": "想让某个字段满足条件时才显示出来，怎么实现",
+      "difficulty": "hard",
+      "expected_files": [
+        "agent_config/context/product_docs/approval_engine_guide.md",
+        "agent_config/context/product_docs/form_usage_guide.md"
+      ],
+      "answer_keywords": ["显隐规则"]
+    },
+    {
+      "id": "para-03",
+      "category": "paraphrase",
+      "query": "多行明细数据怎么合并到一行显示",
+      "difficulty": "hard",
+      "expected_files": [
+        "agent_config/context/product_docs/data_factory_guide.md",
+        "agent_config/context/faq/general_faq.md"
+      ],
+      "answer_keywords": ["多行合并"]
+    },
+    {
+      "id": "para-04",
+      "category": "paraphrase",
+      "query": "系统能不能主动把表单数据推送给别人的系统",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["推送"]
+    },
+    {
+      "id": "para-05",
+      "category": "paraphrase",
+      "query": "表单已经开了免登录，微信里打开还是要账号，卡在哪一步",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["微服务应用管理"]
+    },
+    {
+      "id": "para-06",
+      "category": "paraphrase",
+      "query": "配置选项的时候数据能从别的表带过来吗",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["数据联动"]
+    },
+
+    {
+      "id": "faq-11",
+      "category": "faq",
+      "query": "产品的负责人是谁怎么查",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["负责人"]
+    },
+    {
+      "id": "faq-12",
+      "category": "faq",
+      "query": "万能打印格式不对怎么排查",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["万能打印FAQ"]
+    },
+    {
+      "id": "faq-13",
+      "category": "faq",
+      "query": "考勤系统有没有现成的方案",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["考勤方案"]
+    },
+    {
+      "id": "faq-14",
+      "category": "faq",
+      "query": "接口的 sign 和 key 怎么申请",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["sign和key"]
+    },
+    {
+      "id": "faq-15",
+      "category": "faq",
+      "query": "表单最近的更新日志在哪看",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["更新日志"]
+    },
+    {
+      "id": "faq-16",
+      "category": "faq",
+      "query": "座位预约的说明文档在哪里",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["座位预约"]
+    },
+    {
+      "id": "faq-17",
+      "category": "faq",
+      "query": "表单方案和审批方案的演示材料在哪",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["表单方案"]
+    },
+    {
+      "id": "faq-18",
+      "category": "faq",
+      "query": "审批的参数文档在哪里",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/faq/general_faq.md"],
+      "answer_keywords": ["审批参数"]
+    },
+
+    {
+      "id": "logic-05",
+      "category": "field_defaults",
+      "query": "多级下拉字段的默认值怎么配",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["多级下拉"]
+    },
+    {
+      "id": "logic-06",
+      "category": "field_defaults",
+      "query": "关联审批字段可以配默认值吗",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["关联审批"]
+    },
+    {
+      "id": "logic-07",
+      "category": "field_defaults",
+      "query": "矩阵单选题的默认值怎么设置",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["矩阵单选"]
+    },
+    {
+      "id": "logic-08",
+      "category": "field_defaults",
+      "query": "部门字段的默认值可以取当前用户所在部门吗",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["部门"]
+    },
+    {
+      "id": "logic-09",
+      "category": "field_defaults",
+      "query": "请假套件的默认值怎么配",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/logic/form-field-default-values.md"],
+      "answer_keywords": ["请假套件"]
+    },
+
+    {
+      "id": "formula-04",
+      "category": "formula",
+      "query": "公式里的日期函数怎么用",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/formula_guide.md"],
+      "answer_keywords": ["日期函数"]
+    },
+    {
+      "id": "formula-05",
+      "category": "formula",
+      "query": "公式支持集合类的函数吗",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/formula_guide.md"],
+      "answer_keywords": ["集合"]
+    },
+
+    {
+      "id": "iq-04",
+      "category": "info_query",
+      "query": "怎么创建一个信息查询项目",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/info_query_guide.md"],
+      "answer_keywords": ["创建信息查询"]
+    },
+    {
+      "id": "iq-05",
+      "category": "info_query",
+      "query": "信息查询的基础设置有哪些项",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/info_query_guide.md"],
+      "answer_keywords": ["基础设置"]
+    },
+
+    {
+      "id": "agg-04",
+      "category": "aggregation",
+      "query": "聚合表的指标怎么配置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/aggregation_table.md"],
+      "answer_keywords": ["指标"]
+    },
+    {
+      "id": "agg-05",
+      "category": "aggregation",
+      "query": "聚合表能同时统计单表和多表数据吗",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/aggregation_table.md"],
+      "answer_keywords": ["多表数据"]
+    },
+
+    {
+      "id": "chart-03",
+      "category": "chart",
+      "query": "图表怎么预览效果",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/chart_engine_guide.md"],
+      "answer_keywords": ["预览"]
+    },
+    {
+      "id": "chart-04",
+      "category": "chart",
+      "query": "图表引擎支持哪些图表类型",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/chart_engine_guide.md"],
+      "answer_keywords": ["图表类型"]
+    },
+    {
+      "id": "chart-05",
+      "category": "chart",
+      "query": "怎么做柱状图",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/product_docs/chart_engine_guide.md"],
+      "answer_keywords": ["柱状图"]
+    },
+
+    {
+      "id": "bp-04",
+      "category": "biz_process",
+      "query": "业务流的节点怎么连线",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/business_process_management.md"],
+      "answer_keywords": ["节点"]
+    },
+    {
+      "id": "bp-05",
+      "category": "biz_process",
+      "query": "业务流可以定时触发吗",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/business_process_management.md"],
+      "answer_keywords": ["定时"]
+    },
+
+    {
+      "id": "ap-06",
+      "category": "approval",
+      "query": "审批流程节点有哪些类型",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["节点"]
+    },
+    {
+      "id": "ap-07",
+      "category": "approval",
+      "query": "审批里怎么配置手写签名",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["手写签名"]
+    },
+    {
+      "id": "ap-08",
+      "category": "approval",
+      "query": "审批的打印模板怎么设置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["打印"]
+    },
+    {
+      "id": "ap-09",
+      "category": "approval",
+      "query": "审批怎么设置抄送人",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["抄送"]
+    },
+
+    {
+      "id": "form-05",
+      "category": "form",
+      "query": "表单里的二维码怎么生成",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["二维码"]
+    },
+    {
+      "id": "form-06",
+      "category": "form",
+      "query": "表单填完的数据怎么推送给别的系统",
+      "difficulty": "medium",
+      "expected_files": [
+        "agent_config/context/product_docs/form_usage_guide.md",
+        "agent_config/context/faq/general_faq.md"
+      ],
+      "answer_keywords": ["数据推送"]
+    },
+    {
+      "id": "form-07",
+      "category": "form",
+      "query": "表单打印的模板怎么设置",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["打印"]
+    },
+    {
+      "id": "form-08",
+      "category": "form",
+      "query": "字段能不能设置成只读不能改",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["只读"]
+    },
+    {
+      "id": "form-09",
+      "category": "form",
+      "query": "表单在手机上打开排版乱了怎么办",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["移动端"]
+    },
+    {
+      "id": "form-10",
+      "category": "form",
+      "query": "表单太长了怎么分页显示",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["分页"]
+    },
+    {
+      "id": "form-11",
+      "category": "form",
+      "query": "表单里怎么加定位字段",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["定位"]
+    },
+    {
+      "id": "form-12",
+      "category": "form",
+      "query": "表单字段下面的提示文字在哪改",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["提示文字"]
+    },
+    {
+      "id": "form-13",
+      "category": "form",
+      "query": "表单里上传的附件能限制大小吗",
+      "difficulty": "medium",
+      "expected_files": [
+        "agent_config/context/product_docs/form_usage_guide.md",
+        "agent_config/context/faq/general_faq.md"
+      ],
+      "answer_keywords": ["附件"]
+    },
+    {
+      "id": "form-14",
+      "category": "form",
+      "query": "表单的数据怎么导出成Excel",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["导出"]
+    },
+    {
+      "id": "form-15",
+      "category": "form",
+      "query": "表单样式怎么换皮肤",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["样式"]
+    },
+
+    {
+      "id": "df-01",
+      "category": "data_factory",
+      "query": "数据工厂的数据流怎么搭建",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/data_factory_guide.md"],
+      "answer_keywords": ["数据流"]
+    },
+    {
+      "id": "df-02",
+      "category": "data_factory",
+      "query": "数据工厂有哪些节点",
+      "difficulty": "easy",
+      "expected_files": ["agent_config/context/product_docs/data_factory_guide.md"],
+      "answer_keywords": ["节点"]
+    },
+    {
+      "id": "df-03",
+      "category": "data_factory",
+      "query": "数据工厂怎么按字段分组汇总",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/data_factory_guide.md"],
+      "answer_keywords": ["分组汇总"]
+    },
+    {
+      "id": "df-04",
+      "category": "data_factory",
+      "query": "数据工厂怎么给重复数据去重",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/data_factory_guide.md"],
+      "answer_keywords": ["去重"]
+    },
+    {
+      "id": "df-05",
+      "category": "data_factory",
+      "query": "数据工厂支持定时执行吗",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/data_factory_guide.md"],
+      "answer_keywords": ["定时"]
+    },
+    {
+      "id": "df-06",
+      "category": "data_factory",
+      "query": "数据工厂的数据源怎么配",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/data_factory_guide.md"],
+      "answer_keywords": ["数据源"]
+    },
+    {
+      "id": "df-07",
+      "category": "data_factory",
+      "query": "数据工厂能不能过滤掉不需要的数据",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/data_factory_guide.md"],
+      "answer_keywords": ["过滤"]
+    },
+
+    {
+      "id": "intro-02",
+      "category": "intro",
+      "query": "平台各产品分别是什么，有介绍吗",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/product_intro.md"],
+      "answer_keywords": ["各产品介绍"]
+    },
+    {
+      "id": "lr-03",
+      "category": "learning",
+      "query": "学习通的答疑群在哪加入",
+      "difficulty": "medium",
+      "expected_files": ["agent_config/context/product_docs/learning_resources_summary.md"],
+      "answer_keywords": ["答疑群"]
+    },
+
+    {
+      "id": "para-07",
+      "category": "paraphrase",
+      "query": "填表时想自动带出另一张表的手机号",
+      "difficulty": "hard",
+      "expected_files": [
+        "agent_config/context/product_docs/form_usage_guide.md",
+        "agent_config/context/faq/general_faq.md"
+      ],
+      "answer_keywords": ["数据联动"]
+    },
+    {
+      "id": "para-08",
+      "category": "paraphrase",
+      "query": "表单填完想生成一个能扫码打开的入口",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["二维码"]
+    },
+    {
+      "id": "para-09",
+      "category": "paraphrase",
+      "query": "几个部门报上来的数据想汇总在一张表里看",
+      "difficulty": "hard",
+      "expected_files": [
+        "agent_config/context/product_docs/aggregation_table.md",
+        "agent_config/context/product_docs/data_factory_guide.md"
+      ],
+      "answer_keywords": ["分组汇总", "聚合表"]
+    },
+    {
+      "id": "para-10",
+      "category": "paraphrase",
+      "query": "同一个人能不能重复提交两次",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["唯一"]
+    },
+    {
+      "id": "para-11",
+      "category": "paraphrase",
+      "query": "领导要看各区域销售额的柱状图",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/chart_engine_guide.md"],
+      "answer_keywords": ["柱状图"]
+    },
+    {
+      "id": "para-12",
+      "category": "paraphrase",
+      "query": "想让审批上留一个签字确认",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/approval_engine_guide.md"],
+      "answer_keywords": ["手写签名"]
+    },
+    {
+      "id": "para-13",
+      "category": "paraphrase",
+      "query": "表格里的数据乱序了，能不能按某个字段重新排",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["排序"]
+    },
+    {
+      "id": "para-14",
+      "category": "paraphrase",
+      "query": "表单里想插一段图文说明",
+      "difficulty": "hard",
+      "expected_files": ["agent_config/context/product_docs/form_usage_guide.md"],
+      "answer_keywords": ["富文本"]
+    }
+  ]
+}

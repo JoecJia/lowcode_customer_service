@@ -3,6 +3,12 @@ import os
 import sys
 import traceback
 
+# Windows 控制台默认 GBK，知识库片段含 emoji 时 print 会抛 UnicodeEncodeError
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 # 确保 agent_config 在 sys.path 中（与 main.py 一致）
 AGENT_CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, AGENT_CONFIG_DIR)
@@ -102,10 +108,25 @@ def main():
     # ── 5. Embedding 模型加载 ──
     print("\n── 5. Embedding 模型 (BAAI/bge-small-zh-v1.5) ──")
     try:
-        from skills.context_transformation.vectorizer import EmbeddingModel
+        from skills.context_transformation.vectorizer import (
+            FAISSIndexManager,
+            EmbeddingModel,
+            check_index_compatibility,
+            load_chunk_meta,
+        )
         embedder = EmbeddingModel()
         test_vec = embedder.encode(["测试"], is_query=True)
         check("模型加载并推理成功", test_vec.shape[0] == 1, f"shape={test_vec.shape}")
+
+        meta = load_chunk_meta()
+        print(f"  索引元数据: model={meta.get('embedding_model', '(未记录)')}, "
+              f"dim={meta.get('embedding_dim', '(未记录)')}")
+        mgr = FAISSIndexManager()
+        mgr.load()
+        ok, reason = check_index_compatibility(meta, embedder, mgr.dim)
+        check("索引与 embedding 模型同源", ok, reason)
+        if not ok:
+            print("  请执行: python3 agent_config/skills/context_transformation/update_index.py rebuild")
     except Exception as e:
         check("模型加载", False, str(e))
         traceback.print_exc()

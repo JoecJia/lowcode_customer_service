@@ -81,4 +81,4 @@
 - `MD5(文本)`: 生成 MD5 值。
 
 ---
-*更多详细用法请参考 [公式编辑使用指南](file:///Users/joec/Joec‘s code/P7_lowcode_customer_service/documents_to_be_converted/公式编辑使用指南.docx)*
+*更多详细用法请参考《公式编辑使用指南》（源文件 `documents_to_be_converted/公式编辑使用指南.docx`，该文件未随仓库分发）*

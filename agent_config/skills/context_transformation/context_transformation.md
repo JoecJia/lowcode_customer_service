@@ -118,7 +118,18 @@ python3 agent_config/skills/context_transformation/compress_assets.py --rollback
 ### 索引产物
 构建完成后，索引文件存储在 `context/.faiss/` 目录下（该目录已加入 `.gitignore`）：
 - `index.faiss`：FAISS 向量索引文件
-- `chunk_meta.json`：每个 chunk 的元信息（来源文件、标题链、文本内容、图片引用）
+- `chunk_meta.json`：索引元信息，含 `embedding_model` / `embedding_dim` / `built_at`，以及每个 chunk 的来源文件、标题链、文本内容、图片引用
+
+### 模型一致性校验（重要）
+`chunk_meta.json` 记录了建索引所用的 embedding 模型与维度。加载索引时会校验：
+- 维度不一致（如索引 512 维、新模型 768 维）→ 直接判定不兼容；
+- 模型名不一致（同维度换模型）→ 同样判定不兼容。
+
+**不兼容时的行为**：
+- 检索侧：向量通道自动禁用（`HybridSearcher.status()` 的 `vector_ready=False`，并带 `vector_error` 说明），混合检索退化为纯 BM25，不会静默返回错误排序；
+- 写入侧：`update_document()` 拒绝增量更新并提示重建。
+
+**更换 embedding 模型后的唯一正确做法**：执行 `update_index.py rebuild` 全量重建，**不要**用 `update` 增量追加（会把两个向量空间的向量混进同一索引）。
 
 ### 核心能力
 
