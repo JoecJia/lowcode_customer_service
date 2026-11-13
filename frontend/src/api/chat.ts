@@ -1,10 +1,29 @@
 import { authFetch } from './auth'
 
+export interface ChatTask {
+  type: string
+  result: string
+  query?: string
+}
+
+/** 后端落库的「思考过程」步骤：reasoning 片段与 task 按到达顺序交错 */
+export interface ChatStep {
+  kind: 'reasoning' | 'task'
+  text?: string
+  type?: string
+  result?: string
+  query?: string
+}
+
 export interface ChatMessage {
   id?: number
   role: 'user' | 'assistant' | 'system'
   content: string
   reasoning_content?: string
+  /** 结构化步骤时间线；新消息直接用它还原思考过程 */
+  steps?: ChatStep[]
+  /** 旧数据（无 steps）兼容回退用 */
+  tasks?: ChatTask[]
   created_at?: number
 }
 
@@ -113,7 +132,7 @@ export function streamChat(
   message: string,
   onContent: (text: string) => void,
   onReasoning: (text: string) => void,
-  onTask: (type: string, result: string) => void,
+  onTask: (type: string, result: string, query: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
 ): AbortController {
@@ -207,7 +226,7 @@ export function streamChat(
             if (DEBUG_STREAM) {
               console.debug(`[SSE] 🔧 task #${taskCount}: type=${data.type}`)
             }
-            onTask(data.type || '', data.result || '')
+            onTask(data.type || '', data.result || '', data.query || '')
             break
           case 'error':
             onError(data.content || 'Unknown error')

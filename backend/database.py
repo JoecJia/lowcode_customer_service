@@ -64,6 +64,7 @@ def _init_db() -> None:
                 role             TEXT NOT NULL,
                 content          TEXT NOT NULL,
                 reasoning_content TEXT DEFAULT '',
+                steps            TEXT DEFAULT '',
                 created_at       REAL NOT NULL,
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
             );
@@ -101,6 +102,8 @@ def _run_migrations() -> None:
         # users 表补列
         ("users", "can_chat", "INTEGER DEFAULT 1"),
         ("users", "can_admin", "INTEGER DEFAULT 0"),
+        # messages 表补列：思考过程的结构化步骤序列（JSON）
+        ("messages", "steps", "TEXT DEFAULT ''"),
     ]
 
     with sqlite3.connect(DB_PATH) as conn:

@@ -1,6 +1,7 @@
 """对话路由：SSE 流式对话 + 会话 CRUD。"""
 
 import os
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,6 +19,11 @@ from services.session_service import get_session_store
 from services.skill_service import get_system_messages
 
 router = APIRouter(prefix="/api")
+
+_TASK_RESULT_RE = re.compile(
+    r"<type>(.*?)</type>\s*<result>(.*?)</result>",
+    re.DOTALL,
+)
 
 
 class ChatRequest(BaseModel):
@@ -104,10 +110,37 @@ async def get_session_messages(
     store = get_session_store()
     messages, has_more = store.get_messages(session_id, limit=limit, before_id=before_id)
 
-    # 过滤 <task_result> 用户消息
-    visible = [m for m in messages if not (
-        m["role"] == "user" and m["content"].startswith("<task_result>")
-    )]
+    # `<task_result>` 是 Skill 回注给模型的内部消息，不能作为对话气泡展示。
+    # 新消息的「思考过程」已由 agent_loop_stream 结构化落库到 steps（含交错顺序），
+    # 直接使用；只有旧数据（无 steps）才从 <task_result> 反推出 tasks 兼容回退。
+    visible: list[dict] = []
+    pending_tasks: list[dict] = []
+    for m in messages:
+        if m["role"] == "user" and m["content"].startswith("<task_result>"):
+            matched = _TASK_RESULT_RE.search(m["content"])
+            if matched:
+                pending_tasks.append({
+                    "type": matched.group(1).strip(),
+                    "result": matched.group(2).strip(),
+                })
+            continue
+        if m["role"] == "user":
+            # 新一轮用户提问：上一轮残留的内部结果不再归属本轮回复
+            pending_tasks = []
+        item = dict(m)
+        if m["role"] == "assistant":
+            if item.get("steps"):
+                pending_tasks = []
+            elif pending_tasks:
+                item["tasks"] = pending_tasks
+                pending_tasks = []
+        visible.append(item)
+
+    # 兜底：流被中断时结果之后没有 assistant 消息，挂到最后一条旧格式 assistant 上
+    if (pending_tasks and visible and visible[-1]["role"] == "assistant"
+            and not visible[-1].get("steps")):
+        visible[-1]["tasks"] = visible[-1].get("tasks", []) + pending_tasks
+
     return {"session_id": session_id, "messages": visible, "has_more": has_more}
 
 

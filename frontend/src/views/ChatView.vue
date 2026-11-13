@@ -12,7 +12,7 @@ import {
   submitFeedback,
   checkFeedback,
 } from '../api/chat'
-import type { Session } from '../api/chat'
+import type { ChatMessage, Session } from '../api/chat'
 import { useAuth } from '../composables/useAuth'
 
 const { currentUser, logout } = useAuth()
@@ -114,17 +114,41 @@ const hasFeedback = ref(false)
 const previewImage = ref<string | null>(null)
 
 // ==================== 类型 ====================
+interface RetrievalImage {
+  alt: string
+  path: string
+  source?: string
+}
+
 interface TaskInfo {
   type: string
   result: string
+  /** 检索词（仅 knowledge_retrieval） */
+  query?: string
+  /** 从 result 拆出的命中文本，保留原始换行 */
+  hitText?: string
+  /** 从 result 拆出的命中图片 */
+  images?: RetrievalImage[]
+}
+
+/** 思考过程的时间线节点，与后端 _StepBuilder 落库的 steps 一一对应 */
+interface ThinkingStep {
+  kind: 'reasoning' | 'task'
+  /** reasoning 片段原文（连续 token 已合并） */
+  text?: string
+  /** 清洗后的缓存，随节流渲染更新，避免模板对每个 token 重跑全文正则 */
+  clean?: string
+  /** task 节点的结构化结果 */
+  task?: TaskInfo
 }
 
 interface UIMessage {
   id?: number
   role: 'user' | 'assistant'
   content: string
+  /** 整段思维链，仅用于「是否有思考过程」判定与兼容，渲染以 steps 为准 */
   reasoning?: string
-  tasks?: TaskInfo[]
+  steps?: ThinkingStep[]
   showThinking?: boolean
   isStreaming?: boolean
   showRegenerate?: boolean
@@ -132,8 +156,8 @@ interface UIMessage {
   created_at?: number
   /** 节流后的 markdown 渲染 HTML，流式期间每 150ms 更新一次，防止图片闪动 */
   _renderedHtml?: string
-  /** 节流后的思考文本（已剔除 think 标记），避免模板对每个 token 重复跑全文正则 */
-  _cleanReasoning?: string
+  /** 下一个 reasoning token 是否另起节点，与后端 _StepBuilder.break_reasoning 同构 */
+  _stepBreak?: boolean
 }
 
 // ==================== 工具函数 ====================
@@ -179,9 +203,11 @@ function syncDerived(msg: UIMessage) {
   } finally {
     _streamingRender = false
   }
-  // 思考文本的清洗（两次全文正则 + trim）一并节流：
-  // 否则模板里的 cleanReasoning() 会在每个 token 上对全文重算，整体复杂度 O(n²)
-  msg._cleanReasoning = msg.reasoning ? cleanReasoning(msg.reasoning) : ''
+  // 各 reasoning 步骤的清洗（两次全文正则 + trim）一并节流：
+  // 否则模板会在每个 token 上对全文重算，整体复杂度 O(n²)
+  for (const step of msg.steps || []) {
+    if (step.kind === 'reasoning') step.clean = cleanReasoning(step.text || '')
+  }
 }
 
 function scheduleRender(msg: UIMessage) {
@@ -202,6 +228,102 @@ function scheduleRender(msg: UIMessage) {
 
 function cleanReasoning(text: string): string {
   return text.replace(/<\/?think>/gi, '').replace(/<THINK_V2>/gi, '').trim()
+}
+
+// ==================== knowledge_retrieval 结果解析 ====================
+// format_knowledge_retrieval_result 的输出固定为：
+//   ### 命中文本
+//   ...
+//   ### 命中图片（可选）
+//   使用 ![图片说明](图片路径) 的 markdown 格式展示图片，例如：
+//   - ![alt](/assets/xxx.png)
+//     source: context/xxx.md
+// 拆开后可保留命中文本原始换行，并把图片单独列出；解析失败时整体作为正文，保证不丢内容。
+const RETRIEVAL_IMAGE_MARK = '### 命中图片（可选）'
+const RETRIEVAL_IMAGE_RE = /^\s*-\s*!\[([^\]]*)\]\(([^)]+)\)/
+const RETRIEVAL_SOURCE_RE = /^\s*source:\s*(.+)$/
+
+function parseRetrievalResult(result: string): { hitText: string; images: RetrievalImage[] } {
+  const markIndex = result.indexOf(RETRIEVAL_IMAGE_MARK)
+  const textPart = markIndex >= 0 ? result.slice(0, markIndex) : result
+  const imagePart = markIndex >= 0 ? result.slice(markIndex + RETRIEVAL_IMAGE_MARK.length) : ''
+  const hitText = textPart.replace(/^###\s*命中文本\s*/, '').trim()
+    || result.trim()
+    || '（未命中）'
+
+  const images: RetrievalImage[] = []
+  const lines = imagePart.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const matched = lines[i].match(RETRIEVAL_IMAGE_RE)
+    if (!matched) continue
+    const sourceMatched = (lines[i + 1] || '').match(RETRIEVAL_SOURCE_RE)
+    images.push({
+      alt: matched[1] || '检索图片',
+      path: matched[2],
+      source: sourceMatched ? sourceMatched[1].trim() : '',
+    })
+  }
+  return { hitText, images }
+}
+
+function makeTask(type: string, result: string, query = ''): TaskInfo {
+  const task: TaskInfo = { type, result, query }
+  if (type === 'knowledge_retrieval') {
+    const parsed = parseRetrievalResult(result)
+    task.hitText = parsed.hitText
+    task.images = parsed.images
+  }
+  return task
+}
+
+// ==================== 思考过程步骤时间线 ====================
+// 与后端 _StepBuilder 同构：连续 reasoning token 合并、遇 content / task 断开。
+// 这样流式期间构造的 steps 与落库回放的 steps 完全一致，刷新后顺序不变。
+const THINK_MARKER_RE = /<THINK_V2>|<\/?think>/gi
+
+function appendReasoningStep(msg: UIMessage, text: string) {
+  // <THINK_V2> / <think> / </think> 是后端合成的控制帧，落库序列里不存在
+  const cleaned = text.replace(THINK_MARKER_RE, '')
+  if (!cleaned) return
+  const steps = msg.steps || (msg.steps = [])
+  const last = steps[steps.length - 1]
+  if (!msg._stepBreak && last && last.kind === 'reasoning') {
+    last.text = (last.text || '') + cleaned
+  } else {
+    steps.push({ kind: 'reasoning', text: cleaned, clean: cleaned })
+  }
+  msg._stepBreak = false
+}
+
+function breakReasoningStep(msg: UIMessage) {
+  msg._stepBreak = true
+}
+
+function appendTaskStep(msg: UIMessage, type: string, result: string, query: string) {
+  const steps = msg.steps || (msg.steps = [])
+  steps.push({ kind: 'task', task: makeTask(type, result, query) })
+  msg._stepBreak = true
+}
+
+/** 历史消息：新数据直接回放 steps；旧数据回退为「整段思维链 + 任务列表」 */
+function buildHistorySteps(m: ChatMessage): ThinkingStep[] {
+  if (m.steps && m.steps.length > 0) {
+    return m.steps.map<ThinkingStep>(s => s.kind === 'task'
+      ? { kind: 'task', task: makeTask(s.type || '', s.result || '', s.query) }
+      : { kind: 'reasoning', text: s.text || '', clean: cleanReasoning(s.text || '') })
+  }
+  const steps: ThinkingStep[] = []
+  if (m.reasoning_content) {
+    steps.push({
+      kind: 'reasoning',
+      text: m.reasoning_content,
+      clean: cleanReasoning(m.reasoning_content),
+    })
+  }
+  for (const t of m.tasks || []) {
+    steps.push({ kind: 'task', task: makeTask(t.type, t.result, t.query) })
+  }
+  return steps
 }
 
 function formatTime(ts: number): string {
@@ -276,7 +398,8 @@ async function loadMessages(sessionId: string) {
       role: m.role as 'user' | 'assistant',
       content: m.content,
       reasoning: m.reasoning_content || '',
-      showThinking: !!(m.reasoning_content),
+      steps: buildHistorySteps(m),
+      showThinking: !!(m.reasoning_content || m.steps?.length || m.tasks?.length),
       isStreaming: false,
       created_at: m.created_at,
     }))
@@ -346,7 +469,7 @@ async function sendMessage() {
     role: 'assistant',
     content: '',
     reasoning: '',
-    tasks: [],
+    steps: [],
     showThinking: true,
     isStreaming: true,
   })
@@ -367,18 +490,19 @@ async function sendMessage() {
         assistantMsg.showThinking = false
       }
       assistantMsg.content += content
+      breakReasoningStep(assistantMsg)
       scheduleRender(assistantMsg)
       scheduleStreamScroll()
     },
     (reasoning) => {
       assistantMsg.reasoning = (assistantMsg.reasoning || '') + reasoning
-      // 思考文本也走节流渲染（_cleanReasoning 在 syncDerived 内更新）
+      appendReasoningStep(assistantMsg, reasoning)
+      // 步骤文本清洗走节流渲染（各 step.clean 在 syncDerived 内更新）
       scheduleRender(assistantMsg)
       scheduleStreamScroll()
     },
-    (type: string, result: string) => {
-      if (!assistantMsg.tasks) assistantMsg.tasks = []
-      assistantMsg.tasks.push({ type, result })
+    (type: string, result: string, query: string) => {
+      appendTaskStep(assistantMsg, type, result, query)
       if (DEBUG_STREAM) console.debug(`[Vue] onTask type="${type}" result="${result.substring(0, 40)}"`)
     },
     () => {
@@ -387,7 +511,7 @@ async function sendMessage() {
       scheduleRender(assistantMsg)
       if (DEBUG_STREAM) {
         console.debug(
-          `[Vue] onDone | reasoning=${assistantMsg.reasoning?.length || 0} content=${assistantMsg.content.length} tasks=${assistantMsg.tasks?.length || 0}`,
+          `[Vue] onDone | reasoning=${assistantMsg.reasoning?.length || 0} content=${assistantMsg.content.length} steps=${assistantMsg.steps?.length || 0}`,
         )
       }
       // showThinking 不再强制覆盖，保持自动收起的状态
@@ -426,7 +550,8 @@ async function handleRegenerate(msg: UIMessage) {
   msg.error = undefined
   msg.showThinking = true
   msg.isStreaming = true
-  msg.tasks = []
+  msg.steps = []
+  msg._stepBreak = true
 
   isStreaming.value = true
 
@@ -439,17 +564,18 @@ async function handleRegenerate(msg: UIMessage) {
         msg.showThinking = false
       }
       msg.content += content
+      breakReasoningStep(msg)
       scheduleRender(msg)
       scheduleStreamScroll()
     },
     (reasoning) => {
       msg.reasoning = (msg.reasoning || '') + reasoning
+      appendReasoningStep(msg, reasoning)
       scheduleRender(msg)
       scheduleStreamScroll()
     },
-    (type: string, result: string) => {
-      if (!msg.tasks) msg.tasks = []
-      msg.tasks.push({ type, result })
+    (type: string, result: string, query: string) => {
+      appendTaskStep(msg, type, result, query)
       if (DEBUG_STREAM) console.debug(`[Vue] onTask(regenerate) type="${type}"`)
     },
     () => {
@@ -458,7 +584,7 @@ async function handleRegenerate(msg: UIMessage) {
       scheduleRender(msg)
       if (DEBUG_STREAM) {
         console.debug(
-          `[Vue] onDone(regenerate) | reasoning=${msg.reasoning?.length || 0} content=${msg.content.length} tasks=${msg.tasks?.length || 0}`,
+          `[Vue] onDone(regenerate) | reasoning=${msg.reasoning?.length || 0} content=${msg.content.length} steps=${msg.steps?.length || 0}`,
         )
       }
       // showThinking 不再强制覆盖，保持自动收起的状态
@@ -643,7 +769,7 @@ async function scrollToBottom() {
  * 流式期间的高频滚动节流。
  *
  * 原先每个 token 都会执行一次「读 scrollHeight + 写 scrollTop」，属于强制同步布局
- * （layout thrashing），并且每次都 querySelectorAll 遍历 DOM 找 .thinking-content，
+ * （layout thrashing），并且每次都 querySelectorAll 遍历 DOM 找 .thinking-steps，
  * 开销随会话长度（消息数、图片数）增长——这是「聊得越久越卡」的主因。
  * 现在统一收敛为每帧最多一次，并缓存思考区元素，避免重复查询。
  */
@@ -663,7 +789,7 @@ function scheduleStreamScroll() {
 
     // 2) 思考过程内容区跟随底部（缓存元素；消息重建后自动重新查询）
     if (!_thinkingContentEl || !_thinkingContentEl.isConnected) {
-      const list = messageArea.value?.querySelectorAll('.thinking-content')
+      const list = messageArea.value?.querySelectorAll('.thinking-steps')
       _thinkingContentEl = list && list.length > 0 ? (list[list.length - 1] as HTMLElement) : null
     }
     if (_thinkingContentEl) {
@@ -726,7 +852,8 @@ async function loadMoreMessages() {
       role: m.role as 'user' | 'assistant',
       content: m.content,
       reasoning: m.reasoning_content || '',
-      showThinking: !!(m.reasoning_content),
+      steps: buildHistorySteps(m),
+      showThinking: !!(m.reasoning_content || m.steps?.length || m.tasks?.length),
       isStreaming: false,
       created_at: m.created_at,
     }))
@@ -935,7 +1062,7 @@ onBeforeUnmount(() => {
               <div class="msg-bubble">
                 <!-- 思考过程 -->
                 <div
-                  v-if="msg.role === 'assistant' && (msg.reasoning || msg.isStreaming || (msg.tasks && msg.tasks.length > 0))"
+                  v-if="msg.role === 'assistant' && (msg.reasoning || msg.isStreaming || (msg.steps && msg.steps.length > 0))"
                   class="thinking-block"
                   :class="{ collapsed: !msg.showThinking }"
                 >
@@ -959,18 +1086,39 @@ onBeforeUnmount(() => {
                       </svg>
                     </span>
                   </div>
-                  <div class="thinking-content">
-                    <!-- Skill 任务执行结果 -->
-                    <template v-if="msg.tasks && msg.tasks.length > 0">
-                      <div v-for="(t, ti) in msg.tasks" :key="ti" class="task-item">
-                        <span class="task-badge">{{ t.type }}</span>
-                        <span class="task-result">{{ t.result }}</span>
+                  <!-- 时间线：reasoning 片段与 Skill 结果按到达顺序交错，刷新后由落库 steps 原样回放 -->
+                  <div class="thinking-steps">
+                    <template v-for="(s, si) in msg.steps || []" :key="si">
+                      <div v-if="s.kind === 'reasoning'" class="reasoning-text">{{ s.clean ?? cleanReasoning(s.text || '') }}</div>
+                      <div v-else-if="s.task?.type === 'knowledge_retrieval'" class="retrieval-card">
+                        <div class="retrieval-header">
+                          <svg class="retrieval-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/>
+                          </svg>
+                          <span class="retrieval-title">知识库检索结果</span>
+                          <span v-if="s.task?.query" class="retrieval-query" :title="s.task?.query">{{ s.task?.query }}</span>
+                        </div>
+                        <div class="retrieval-text">{{ s.task?.hitText || s.task?.result }}</div>
+                        <div v-if="s.task?.images && s.task.images.length > 0" class="retrieval-images">
+                          <div
+                            v-for="(img, ii) in s.task?.images || []"
+                            :key="ii"
+                            class="retrieval-image"
+                            :title="img.source || img.alt"
+                            @click="openImagePreview(img.path)"
+                          >
+                            <img :src="img.path" :alt="img.alt" />
+                            <span class="retrieval-image-alt">{{ img.alt }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else-if="s.task" class="task-item">
+                        <span class="task-badge">{{ s.task?.type }}</span>
+                        <span class="task-result">{{ s.task?.result }}</span>
                       </div>
                     </template>
-                    <!-- 大模型思考推理过程 -->
-                    <div v-if="msg.reasoning" class="reasoning-text">{{ msg._cleanReasoning ?? cleanReasoning(msg.reasoning) }}</div>
                     <!-- 占位：等待思考内容 -->
-                    <div v-if="msg.isStreaming && !msg.reasoning && (!msg.tasks || msg.tasks.length === 0)" class="thinking-placeholder">
+                    <div v-if="msg.isStreaming && (!msg.steps || msg.steps.length === 0)" class="thinking-placeholder">
                       正在分析...
                     </div>
                   </div>
@@ -978,7 +1126,7 @@ onBeforeUnmount(() => {
 
                 <!-- 分隔线 -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.reasoning && msg.content"
+                  v-if="msg.role === 'assistant' && (msg.reasoning || (msg.steps && msg.steps.length > 0)) && msg.content"
                   class="thinking-divider"
                 ></div>
 
@@ -1598,27 +1746,30 @@ onBeforeUnmount(() => {
   0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
   30% { opacity: 1; transform: scale(1); }
 }
-.thinking-content {
+/* 思考过程时间线：reasoning 片段与任务卡片按序排列，统一滚动 */
+.thinking-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 12px;
   font-size: 12px;
   color: var(--color-text-tertiary);
   line-height: 20px;
-  max-height: 100px;
+  max-height: 300px;
   overflow-y: auto;
   border-top: 1px solid var(--color-border-light);
 }
-.thinking-block.collapsed .thinking-content {
+.thinking-block.collapsed .thinking-steps {
   display: none;
 }
-.thinking-content::-webkit-scrollbar { width: 3px; }
-.thinking-content::-webkit-scrollbar-thumb {
+.thinking-steps::-webkit-scrollbar { width: 3px; }
+.thinking-steps::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 2px;
 }
 
 /* 任务执行项 */
 .task-item {
-  margin-bottom: 8px;
   padding: 6px 8px;
   background: #F0F4FF;
   border-radius: var(--radius-sm);
@@ -1635,8 +1786,18 @@ onBeforeUnmount(() => {
   margin-right: 6px;
 }
 .task-result {
+  display: block;
+  margin-top: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
   color: var(--color-text-secondary);
   word-break: break-word;
+}
+.task-result::-webkit-scrollbar { width: 3px; }
+.task-result::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
 }
 
 /* 思考推理文本 */
@@ -1649,6 +1810,87 @@ onBeforeUnmount(() => {
 .thinking-placeholder {
   color: var(--color-text-disabled);
   font-style: italic;
+}
+
+/* knowledge_retrieval 结果卡片（时间线中的一个步骤） */
+.retrieval-card {
+  border: 1px solid #E0E8FF;
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: #F7F9FF;
+  padding: 8px 10px;
+}
+.retrieval-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+.retrieval-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--color-primary);
+}
+.retrieval-title {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+.retrieval-query {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: #E0E8FF;
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.retrieval-text {
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 19px;
+  color: var(--color-text-secondary);
+}
+.retrieval-text::-webkit-scrollbar { width: 3px; }
+.retrieval-text::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+.retrieval-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.retrieval-image {
+  width: 96px;
+  cursor: zoom-in;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.retrieval-image img {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.retrieval-image-alt {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thinking-divider {

@@ -54,6 +54,35 @@ _START_RAW_JSON = re.compile(r'\[\s*\{\s*"(?:name|type|task_type)"\s*:\s*"')
 _TAIL_PARTIAL_JSON = re.compile(r'^\[[^\]()]*$')
 
 
+class _StepBuilder:
+    """按事件到达顺序构造「思考过程」步骤序列，落库后供前端原样回放。
+
+    连续 reasoning token 合并成一个节点；遇到 content 或 task 则断开，
+    因此「思考 → 调用技能 → 再思考」的交错顺序不会因为字符串拼接而丢失。
+    """
+
+    def __init__(self) -> None:
+        self.steps: list[dict] = []
+        self._broken = True
+
+    def reasoning(self, text: str) -> None:
+        if self._broken or not self.steps or self.steps[-1]["kind"] != "reasoning":
+            self.steps.append({"kind": "reasoning", "text": text})
+        else:
+            self.steps[-1]["text"] += text
+        self._broken = False
+
+    def task(self, task_type: str, result: str, query: str = "") -> None:
+        step = {"kind": "task", "type": task_type, "result": result}
+        if query:
+            step["query"] = query
+        self.steps.append(step)
+        self._broken = True
+
+    def break_reasoning(self) -> None:
+        self._broken = True
+
+
 # ── 上下文截断 ──
 
 def truncate_messages(system_msgs: list[dict], history_msgs: list[dict]) -> list[dict]:
@@ -336,6 +365,8 @@ async def agent_loop_stream(
     # 跨轮次累积：将多轮 agent 循环中的思考过程和最终回答分别累积
     all_content_parts: list[str] = []
     all_reasoning_parts: list[str] = []
+    # 「思考过程」结构化步骤时间线：与 SSE 事件同序，最终随 assistant 消息落库
+    steps_builder = _StepBuilder()
 
     async def close_out(warning: str | None = None) -> AsyncGenerator[str, None]:
         """异常退出时的统一收尾，保证用户始终能拿到最终回答。
@@ -355,7 +386,8 @@ async def agent_loop_stream(
         existing = clean_task_blocks("".join(all_content_parts)).strip()
         if existing:
             store.append_message(
-                session_id, "assistant", existing, "".join(all_reasoning_parts)
+                session_id, "assistant", existing, "".join(all_reasoning_parts),
+                steps_builder.steps,
             )
             yield "event: done\ndata: {}\n\n"
             return
@@ -384,9 +416,13 @@ async def agent_loop_stream(
             for delta_type, text in stream_chat_completions(api_key, forced_payload, ssl_context):
                 if delta_type == "content":
                     answer_parts.append(text)
+                    steps_builder.break_reasoning()
                     yield f"event: content\ndata: {json.dumps({'content': text})}\n\n"
                 elif delta_type == "reasoning":
                     extra_reasoning.append(text)
+                    steps_builder.reasoning(text)
+                    # 这一轮思考同样落库，前后端必须同时可见，否则刷新后顺序会多出一段
+                    yield f"event: reasoning\ndata: {json.dumps({'content': text})}\n\n"
                 elif delta_type == "error":
                     _trace(f"[debug]   收尾作答出错：{text}")
                     break
@@ -410,6 +446,7 @@ async def agent_loop_stream(
             "assistant",
             answer,
             "".join(all_reasoning_parts + extra_reasoning),
+            steps_builder.steps,
         )
         yield "event: done\ndata: {}\n\n"
 
@@ -441,6 +478,7 @@ async def agent_loop_stream(
             for delta_type, text in filter_task_stream(_tee_collect(llm_stream, collected)):
                 if delta_type == "reasoning":
                     reasoning_parts.append(text)
+                    steps_builder.reasoning(text)
                     if not saw_think:
                         saw_think = True
                         yield f"event: reasoning\ndata: {json.dumps({'content': '<THINK_V2>'})}\n\n"
@@ -449,6 +487,7 @@ async def agent_loop_stream(
                     if DEBUG:
                         print(f"[agent] content delta: len={len(text)} {repr(text[:80])}", file=sys.stderr)
                     content_parts.append(text)
+                    steps_builder.break_reasoning()
                     if saw_think:
                         saw_think = False
                         yield f"event: reasoning\ndata: {json.dumps({'content': '</think>'})}\n\n"
@@ -461,6 +500,7 @@ async def agent_loop_stream(
                             "assistant",
                             clean_task_blocks("".join(all_content_parts)),
                             "".join(all_reasoning_parts),
+                            steps_builder.steps,
                         )
                     return
 
@@ -480,6 +520,7 @@ async def agent_loop_stream(
                     "assistant",
                     clean_task_blocks("".join(all_content_parts)),
                     "".join(all_reasoning_parts),
+                    steps_builder.steps,
                 )
             return
         except Exception as e:
@@ -491,6 +532,7 @@ async def agent_loop_stream(
                     "assistant",
                     clean_task_blocks("".join(all_content_parts)),
                     "".join(all_reasoning_parts),
+                    steps_builder.steps,
                 )
             return
 
@@ -568,6 +610,7 @@ async def agent_loop_stream(
                     "assistant",
                     final_content,
                     final_reasoning,
+                    steps_builder.steps,
                 )
             yield "event: done\ndata: {}\n\n"
             return
@@ -609,7 +652,17 @@ async def agent_loop_stream(
                     f"{(time.perf_counter() - _t_dispatch) * 1000:.0f}ms，返回 {len(result_text)} 字"
                 )
 
-            yield f"event: task\ndata: {json.dumps({'type': task.task_type, 'status': 'executed', 'result': result_text})}\n\n"
+            steps_builder.task(task.task_type, result_text, task.query or "")
+
+            task_payload = {
+                "type": task.task_type,
+                "status": "executed",
+                "result": result_text,
+            }
+            # 检索类技能把检索词一并下发，供「思考过程」展示检索依据
+            if task.query:
+                task_payload["query"] = task.query
+            yield f"event: task\ndata: {json.dumps(task_payload)}\n\n"
 
             task_msg = format_task_result(task.task_type, result_text)
             messages.append(task_msg)

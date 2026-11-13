@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import time
 import uuid
@@ -49,14 +50,14 @@ class SessionStore:
             conn.row_factory = sqlite3.Row
             if before_id is not None:
                 rows = conn.execute(
-                    "SELECT id, role, content, reasoning_content, created_at "
+                    "SELECT id, role, content, reasoning_content, steps, created_at "
                     "FROM messages WHERE session_id = ? AND id < ? "
                     "ORDER BY created_at DESC LIMIT ?",
                     (session_id, before_id, limit + 1),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT id, role, content, reasoning_content, created_at "
+                    "SELECT id, role, content, reasoning_content, steps, created_at "
                     "FROM messages WHERE session_id = ? "
                     "ORDER BY created_at ASC LIMIT ?",
                     (session_id, limit + 1),
@@ -72,11 +73,19 @@ class SessionStore:
 
         messages = []
         for row in rows:
+            # steps 存的是「思考过程」事件序列的 JSON；旧数据或脏数据按空列表处理
+            try:
+                parsed_steps = json.loads(row["steps"]) if row["steps"] else []
+            except (ValueError, TypeError):
+                parsed_steps = []
+            if not isinstance(parsed_steps, list):
+                parsed_steps = []
             msg = {
                 "id": row["id"],
                 "role": row["role"],
                 "content": row["content"],
                 "reasoning_content": row["reasoning_content"] or "",
+                "steps": parsed_steps,
                 "created_at": row["created_at"],
             }
             messages.append(msg)
@@ -93,7 +102,19 @@ class SessionStore:
             }
         return messages, has_more
 
-    def append_message(self, session_id: str, role: str, content: str, reasoning_content: str = "") -> None:
+    def append_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        reasoning_content: str = "",
+        steps: list[dict] | None = None,
+    ) -> None:
+        """写入一条消息。
+
+        steps 只用于「思考过程」的结构化回放，不进入内存上下文缓存，
+        避免把展示数据回灌给模型。
+        """
         now = time.time()
         msg = {"role": role, "content": content}
         if reasoning_content:
@@ -110,10 +131,12 @@ class SessionStore:
                     "last_active": now,
                 }
 
+        steps_json = json.dumps(steps, ensure_ascii=False) if steps else ""
         with get_db() as conn:
             conn.execute(
-                "INSERT INTO messages (session_id, role, content, reasoning_content, created_at) VALUES (?, ?, ?, ?, ?)",
-                (session_id, role, content, reasoning_content, now),
+                "INSERT INTO messages (session_id, role, content, reasoning_content, steps, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (session_id, role, content, reasoning_content, steps_json, now),
             )
             conn.execute(
                 "UPDATE sessions SET updated_at = ? WHERE id = ?",
