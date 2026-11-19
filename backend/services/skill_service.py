@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from config import REPO_DIR
@@ -64,7 +65,8 @@ async def dispatch_skill(repo_dir: str, task: Task) -> str:
             from services.search_service import knowledge_retrieval, format_knowledge_retrieval_result
             q = task.query or ""
             k = task.top_k or 3
-            result = knowledge_retrieval(repo_dir, q, k)
+            # 检索是同步 CPU 密集操作（BM25 + FAISS + rerank），放线程池避免阻塞事件循环
+            result = await asyncio.to_thread(knowledge_retrieval, repo_dir, q, k)
             return format_knowledge_retrieval_result(result)
 
         full_path = os.path.join(repo_dir, skill_path)

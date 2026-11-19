@@ -65,6 +65,7 @@ def _init_db() -> None:
                 content          TEXT NOT NULL,
                 reasoning_content TEXT DEFAULT '',
                 steps            TEXT DEFAULT '',
+                attachments      TEXT DEFAULT '[]',
                 created_at       REAL NOT NULL,
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
             );
@@ -104,6 +105,8 @@ def _run_migrations() -> None:
         ("users", "can_admin", "INTEGER DEFAULT 0"),
         # messages 表补列：思考过程的结构化步骤序列（JSON）
         ("messages", "steps", "TEXT DEFAULT ''"),
+        # messages 表补列：用户上传的图片/PDF 元数据（JSON）
+        ("messages", "attachments", "TEXT DEFAULT '[]'"),
     ]
 
     with sqlite3.connect(DB_PATH) as conn:

@@ -6,6 +6,46 @@ export interface ChatTask {
   query?: string
 }
 
+export type AttachmentKind = 'image' | 'pdf'
+
+export interface ChatAttachment {
+  id: string
+  kind: AttachmentKind
+  name: string
+  mime: string
+  size: number
+  width?: number
+  height?: number
+  page_count?: number | null
+  sha256?: string
+  storage?: { type: string; ref: string }
+  preview_url?: string
+}
+
+/** 前端待发送附件；图片用 dataUrl，PDF 用裸 base64 */
+export interface PendingAttachment {
+  id: string
+  kind: AttachmentKind
+  name: string
+  mime: string
+  size: number
+  dataUrl?: string
+  base64?: string
+  previewUrl?: string
+  status: 'ready' | 'error'
+  error?: string
+}
+
+export interface AttachmentPayload {
+  id?: string
+  kind: AttachmentKind
+  name: string
+  mime: string
+  size: number
+  data_url?: string
+  base64?: string
+}
+
 /** 后端落库的「思考过程」步骤：reasoning 片段与 task 按到达顺序交错 */
 export interface ChatStep {
   kind: 'reasoning' | 'task'
@@ -19,6 +59,7 @@ export interface ChatMessage {
   id?: number
   role: 'user' | 'assistant' | 'system'
   content: string
+  attachments?: ChatAttachment[]
   reasoning_content?: string
   /** 结构化步骤时间线；新消息直接用它还原思考过程 */
   steps?: ChatStep[]
@@ -135,6 +176,8 @@ export function streamChat(
   onTask: (type: string, result: string, query: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
+  attachments: AttachmentPayload[] = [],
+  onTitle?: (title: string) => void,
 ): AbortController {
   const controller = new AbortController()
   const token = localStorage.getItem('auth_token')
@@ -153,7 +196,12 @@ export function streamChat(
   fetch(`${BASE}/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ session_id: sessionId, message, new_session: false }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      new_session: false,
+      attachments,
+    }),
     signal: controller.signal,
   }).then(async (resp) => {
     if (resp.status === 401) {
@@ -230,6 +278,12 @@ export function streamChat(
             break
           case 'error':
             onError(data.content || 'Unknown error')
+            break
+          case 'title':
+            if (DEBUG_STREAM) {
+              console.debug(`[SSE] 🏷️ title: "${data.title || ''}"`)
+            }
+            onTitle?.(data.title || '')
             break
           case 'done':
             onDone()

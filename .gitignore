@@ -43,6 +43,10 @@ agent_config/data/
 .trae/
 venv/
 
+# 本地工具数据（不上传）
+.codebuddy/
+.playwright-cli/
+
 # Frontend
 frontend/node_modules/
 frontend/dist/

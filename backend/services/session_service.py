@@ -9,6 +9,17 @@ from config import SESSION_TTL_SECONDS
 from database import get_db
 
 
+def _parse_attachments(raw) -> list[dict]:
+    """兼容旧数据与脏数据：附件列缺失/为空/非法 JSON 时一律返回空列表。"""
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
 class SessionStore:
     def __init__(self):
         self._lock = Lock()
@@ -50,14 +61,14 @@ class SessionStore:
             conn.row_factory = sqlite3.Row
             if before_id is not None:
                 rows = conn.execute(
-                    "SELECT id, role, content, reasoning_content, steps, created_at "
+                    "SELECT id, role, content, reasoning_content, steps, attachments, created_at "
                     "FROM messages WHERE session_id = ? AND id < ? "
                     "ORDER BY created_at DESC LIMIT ?",
                     (session_id, before_id, limit + 1),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT id, role, content, reasoning_content, steps, created_at "
+                    "SELECT id, role, content, reasoning_content, steps, attachments, created_at "
                     "FROM messages WHERE session_id = ? "
                     "ORDER BY created_at ASC LIMIT ?",
                     (session_id, limit + 1),
@@ -86,6 +97,7 @@ class SessionStore:
                 "content": row["content"],
                 "reasoning_content": row["reasoning_content"] or "",
                 "steps": parsed_steps,
+                "attachments": _parse_attachments(row["attachments"]),
                 "created_at": row["created_at"],
             }
             messages.append(msg)
@@ -94,7 +106,8 @@ class SessionStore:
         now = time.time()
         with self._lock:
             cached = [{"role": m["role"], "content": m["content"],
-                       "reasoning_content": m.get("reasoning_content", "")} for m in messages]
+                       "reasoning_content": m.get("reasoning_content", ""),
+                       "attachments": m.get("attachments", [])} for m in messages]
             self._temp_sessions[session_id] = {
                 "messages": cached,
                 "created_at": now,
@@ -109,16 +122,20 @@ class SessionStore:
         content: str,
         reasoning_content: str = "",
         steps: list[dict] | None = None,
-    ) -> None:
-        """写入一条消息。
+        attachments: list[dict] | None = None,
+    ) -> int:
+        """写入一条消息并返回 message_id。
 
         steps 只用于「思考过程」的结构化回放，不进入内存上下文缓存，
-        避免把展示数据回灌给模型。
+        避免把展示数据回灌给模型。attachments 只保存元数据与文件引用。
         """
         now = time.time()
+        attachment_list = attachments or []
         msg = {"role": role, "content": content}
         if reasoning_content:
             msg["reasoning_content"] = reasoning_content
+        if attachment_list:
+            msg["attachments"] = attachment_list
 
         with self._lock:
             if session_id in self._temp_sessions:
@@ -132,16 +149,54 @@ class SessionStore:
                 }
 
         steps_json = json.dumps(steps, ensure_ascii=False) if steps else ""
+        attachments_json = json.dumps(attachment_list, ensure_ascii=False) if attachment_list else "[]"
         with get_db() as conn:
-            conn.execute(
-                "INSERT INTO messages (session_id, role, content, reasoning_content, steps, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (session_id, role, content, reasoning_content, steps_json, now),
+            cursor = conn.execute(
+                "INSERT INTO messages (session_id, role, content, reasoning_content, steps, attachments, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (session_id, role, content, reasoning_content, steps_json, attachments_json, now),
             )
+            message_id = int(cursor.lastrowid)
             conn.execute(
                 "UPDATE sessions SET updated_at = ? WHERE id = ?",
                 (now, session_id),
             )
+            conn.commit()
+        return message_id
+
+    def update_message_attachments(self, message_id: int, attachments: list[dict]) -> None:
+        """消息先落库拿到 message_id 后，再回填附件元数据。"""
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE messages SET attachments = ? WHERE id = ?",
+                (json.dumps(attachments, ensure_ascii=False), message_id),
+            )
+            conn.commit()
+
+    def get_message_by_id(self, message_id: int) -> dict | None:
+        """按消息 ID 读取消息，用于附件内容鉴权。"""
+        with get_db() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT id, session_id, role, content, attachments, created_at "
+                "FROM messages WHERE id = ?",
+                (message_id,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "id": row["id"],
+                "session_id": row["session_id"],
+                "role": row["role"],
+                "content": row["content"],
+                "attachments": _parse_attachments(row["attachments"]),
+                "created_at": row["created_at"],
+            }
+
+    def delete_message_by_id(self, message_id: int) -> None:
+        """附件落盘失败时回滚占位消息。"""
+        with get_db() as conn:
+            conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
             conn.commit()
 
     def archive_session(self, session_id: str) -> None:
@@ -194,6 +249,38 @@ class SessionStore:
                 (title, time.time(), session_id),
             )
             conn.commit()
+
+    def get_title(self, session_id: str) -> str:
+        """读取当前标题，用于触发判定与乐观回写快照。"""
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT title FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        return (row[0] or "") if row else ""
+
+    def has_user_text_message(self, session_id: str) -> bool:
+        """是否已有含文本的用户消息（纯附件消息不算）。"""
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM messages WHERE session_id = ? "
+                "AND role = 'user' AND trim(content) <> '' LIMIT 1",
+                (session_id,),
+            ).fetchone()
+        return row is not None
+
+    def set_generated_title(
+        self, session_id: str, title: str, expected_title: str
+    ) -> bool:
+        """乐观回写：仅当当前标题仍为 expected_title 时写入，返回是否成功。"""
+        now = time.time()
+        with get_db() as conn:
+            cursor = conn.execute(
+                "UPDATE sessions SET title = ?, updated_at = ? "
+                "WHERE id = ? AND title = ?",
+                (title, now, session_id, expected_title),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
     def list_sessions(
         self,

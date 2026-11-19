@@ -1,14 +1,18 @@
 """Agent 核心服务：SSE 流过滤、上下文截断、Agent 多轮循环调度。"""
 
+import asyncio
 import json
 import os
 import re
 import sys
+import threading
 import time
 import urllib.error
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Callable, Iterator
 
 from config import (
+    ARK_TEXT_MODEL,
+    ARK_VISION_MODEL,
     DEBUG,
     MAX_AGENT_TURNS,
     MAX_IDENTICAL_TASK_CALLS,
@@ -16,6 +20,7 @@ from config import (
     MAX_TASK_CALLS,
     REPO_DIR,
 )
+from services.message_content import content_weight, has_multimodal_part
 
 # ── 调试追踪 ──
 # ARK_DEBUG=1 打开追踪；若同时设置 ARK_TRACE_PATH，则同时落盘便于离线分析
@@ -86,15 +91,18 @@ class _StepBuilder:
 # ── 上下文截断 ──
 
 def truncate_messages(system_msgs: list[dict], history_msgs: list[dict]) -> list[dict]:
-    """上下文截断：从头部丢弃旧消息，保留最近轮次。"""
-    total = sum(len(m.get("content", "")) for m in system_msgs + history_msgs)
+    """上下文截断：从头部丢弃旧消息，保留最近轮次。
+
+    content 可能是字符串（纯文本）或多模态数组，统一用 content_weight 计权。
+    """
+    total = sum(content_weight(m.get("content", "")) for m in system_msgs + history_msgs)
     if total <= MAX_CONTEXT_CHARS:
         return system_msgs + history_msgs
 
     min_retain = MIN_RETAIN_ROUNDS * 2
     truncated = list(history_msgs)
     while len(truncated) > min_retain:
-        total = sum(len(m.get("content", "")) for m in system_msgs + truncated)
+        total = sum(content_weight(m.get("content", "")) for m in system_msgs + truncated)
         if total <= MAX_CONTEXT_CHARS:
             break
         truncated = truncated[2:]
@@ -335,6 +343,41 @@ def clean_task_blocks(text: str) -> str:
     return text.strip()
 
 
+# ── 同步流 → 异步流桥接 ──
+
+_STREAM_END = object()
+
+
+async def _async_stream(factory: Callable[[], Iterator[tuple[str, str]]]):
+    """在线程池中消费同步生成器，经 asyncio.Queue 桥接为异步流。
+
+    同步生成器（llm_service.stream_chat_completions）内部使用 urllib 阻塞读取，
+    直接在事件循环里迭代会阻塞所有并发请求。此函数把阻塞迭代搬到线程池，
+    通过 call_soon_threadsafe 把每个 token 投递回事件循环，由本异步生成器 yield。
+    """
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def produce():
+        try:
+            for item in factory():
+                loop.call_soon_threadsafe(queue.put_nowait, item)
+        except BaseException as exc:  # 异常也要传回事件循环，否则异步侧永久等待
+            loop.call_soon_threadsafe(queue.put_nowait, exc)
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, _STREAM_END)
+
+    threading.Thread(target=produce, daemon=True).start()
+
+    while True:
+        item = await queue.get()
+        if item is _STREAM_END:
+            break
+        if isinstance(item, BaseException):
+            raise item
+        yield item
+
+
 # ── 工具函数 ──
 
 def _tee_collect(source, collected: list):
@@ -357,6 +400,7 @@ async def agent_loop_stream(
     """Agent 多轮对话循环：流式调用 LLM，解析 Task，调度 Skill，输出 SSE 事件。"""
     ssl_context = build_ssl_context()
     store = get_session_store()
+    model_name = ARK_VISION_MODEL if has_multimodal_part(messages) else ARK_TEXT_MODEL
     task_calls = 0
     # 重复调用检测：分别统计「完全相同的任务」与「同一技能」的累计调用次数
     identical_task_counts: dict[str, int] = {}
@@ -402,7 +446,7 @@ async def agent_loop_stream(
             }
         ]
         forced_payload = {
-            "model": "doubao-seed-2-0-pro-260215",
+            "model": model_name,
             "messages": forced_messages,
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -413,7 +457,9 @@ async def agent_loop_stream(
         answer_parts: list[str] = []
         extra_reasoning: list[str] = []
         try:
-            for delta_type, text in stream_chat_completions(api_key, forced_payload, ssl_context):
+            async for delta_type, text in _async_stream(
+                lambda: stream_chat_completions(api_key, forced_payload, ssl_context)
+            ):
                 if delta_type == "content":
                     answer_parts.append(text)
                     steps_builder.break_reasoning()
@@ -454,7 +500,7 @@ async def agent_loop_stream(
         if DEBUG:
             _trace(f"\n[debug] ===== turn {turn} 开始 =====")
         payload = {
-            "model": "doubao-seed-2-0-pro-260215",
+            "model": model_name,
             "messages": messages,
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -473,9 +519,11 @@ async def agent_loop_stream(
             # 直接流式处理，不缓冲所有 delta
             # 使用 TeeCollector 在流式传输的同时收集原始 delta 用于 task 解析
             collected: list[tuple[str, str]] = []
+            # 同步 urllib 流搬到线程池消费，避免阻塞事件循环（否则并发接口被卡 1~4s）
             llm_stream = stream_chat_completions(api_key, payload, ssl_context)
+            filtered = filter_task_stream(_tee_collect(llm_stream, collected))
 
-            for delta_type, text in filter_task_stream(_tee_collect(llm_stream, collected)):
+            async for delta_type, text in _async_stream(lambda: filtered):
                 if delta_type == "reasoning":
                     reasoning_parts.append(text)
                     steps_builder.reasoning(text)

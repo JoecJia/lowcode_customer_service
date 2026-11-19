@@ -16,6 +16,23 @@
     - [信息查询使用指南](agent_config/context/product_docs/info_query_guide.md): 包含从表单、审批和 Excel 中快速查询信息、多源数据匹配及查询结果展示。
     - [数据工厂使用指南](agent_config/context/product_docs/data_factory_guide.md): 包含数据加工处理工具、八大核心节点（横向连接、追加合并、分组汇总等）、数据同步及分析流程。
     - [办公产品学习资料汇总](agent_config/context/product_docs/learning_resources_summary.md): 包含各引擎使用说明、更新日志、答疑群信息及培训会议资料。
+- **API & SDK 接口文档 (API & SDK)**
+  - 路径: `agent_config/context/API&SDK/`
+  - 索引内容:
+    - [API & SDK 接口文档总览](agent_config/context/API&SDK/index.md): ShowDoc 导出的表单引擎 WebAPI（60 篇）、审批引擎 WebAPI（61 篇）、表单/审批 SDK（66 篇）三套文档的总入口，含项目导航与分类清单。
+    - [接口链接清单](agent_config/context/API&SDK/接口链接.md): 187 个接口的「接口名称 → ShowDoc 在线地址 → 知识库文档路径」对照表，按项目与分类分组；检索接口文档时据此返回官方接口地址。
+    - [表单引擎 webAPI 目录索引](agent_config/context/API&SDK/表单/_index.md): 逐页索引，覆盖表单应用、表单配置、表单数据增删改查、数据推送、页面地址、推送提醒、计划上线等接口。
+    - [审批引擎 webAPI 目录索引](agent_config/context/API&SDK/审批/_index.md): 逐页索引，覆盖通用审批服务、数据检索/增删改、审批流程流转、审批应用与配置、流程查询、数据统计、审批助手等接口。
+    - [表单/审批 SDK 目录索引](agent_config/context/API&SDK/SDK/_index.md): 逐页索引，含 v1.x（推荐）与 v0.x（旧版）两套的使用方式、FormsData/LogicSearchFilter 构造、表单/审批接口及 Response 属性说明。
+    - [SDK 办公业务码 code 说明](agent_config/context/API&SDK/SDK/办公业务码code说明.md): 对接时使用的业务码 code 取值与含义。
+    - [表单字段类型标识字典](agent_config/context/API&SDK/SDK/表单字段类型标识字典.md): 表单字段类型标识与对应取值，接口传参时用于识别字段类型。
+    - [办公 SDK 版本更新说明](agent_config/context/API&SDK/SDK/办公SDK版本更新说明.md): SDK 版本演进、兼容性及各版本新增/变更接口。
+    - [通用审批服务申请接口](<agent_config/context/API&SDK/审批/通用审批服务/通用审批服务申请接口.md>): 第三方发起通用审批的入参、流程节点与返回值说明。
+    - [审批环节流程结构说明](<agent_config/context/API&SDK/审批/通用审批服务/审批环节流程结构说明.md>): 审批环节与流程节点的结构定义，对接审批接口前的前置知识。
+    - [单条数据新增接口](<agent_config/context/API&SDK/表单/表单数据接口(增删改查)/单条数据新增接口.md>): 表单数据写入接口的参数构造与示例。
+    - [SDK v1.x 使用方式](<agent_config/context/API&SDK/SDK/v1.x/使用方式.md>): v1.x SDK 的引入、初始化与调用流程。
+    - [SDK v1.x 表单数据 FormsData 构造方式](<agent_config/context/API&SDK/SDK/v1.x/表单数据FormsData构造方式.md>): 表单数据对象构造规则，写入/编辑接口必读。
+    - [SDK v1.x 检索条件 LogicSearchFilter 构造方式](<agent_config/context/API&SDK/SDK/v1.x/检索条件LogicSearchFilter构造方式.md>): 高级检索条件（且/或混合）的构造规则。
 - **业务逻辑 (Logic)**
   - 路径: `agent_config/context/logic/`
   - 索引内容:
