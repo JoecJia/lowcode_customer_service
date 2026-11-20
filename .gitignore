@@ -28,6 +28,10 @@ __pycache__/
 # FAISS vector index (auto-generated, large binary)
 agent_config/context/.faiss/
 
+# Context 变更暂存区/备份区（运行时数据，不入库）
+agent_config/context/.staging/
+agent_config/context/.backup/
+
 # SQLite database (auto-generated)
 backend/data/
 

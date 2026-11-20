@@ -11,6 +11,7 @@
 import asyncio
 import json
 import os
+import re
 import sys
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
@@ -27,6 +28,27 @@ from config import DEBUG, MCP_CALL_TIMEOUT_SECONDS, MCP_SERVERS_PATH
 # 目录渲染限制
 _CATALOG_MAX_CHARS = 4096
 _DESC_MAX_CHARS = 200
+
+# 方舟 function name 约束：仅允许 [A-Za-z0-9_-]；MCP 原始名含 "."，需映射为 "__"。
+_MCP_NAME_BY_SAFE: dict[str, str] = {}
+_SAFE_NAME_BY_MCP: dict[str, str] = {}
+
+
+def to_safe_tool_name(external_name: str) -> str:
+    """把 MCP 外部工具名映射为合法的 function name，并登记反向映射。"""
+    if external_name in _SAFE_NAME_BY_MCP:
+        return _SAFE_NAME_BY_MCP[external_name]
+    safe = re.sub(r"[^A-Za-z0-9_-]", "__", external_name)
+    if not safe:
+        safe = "mcp_tool"
+    _MCP_NAME_BY_SAFE[safe] = external_name
+    _SAFE_NAME_BY_MCP[external_name] = safe
+    return safe
+
+
+def resolve_tool_name(name: str) -> str:
+    """把模型回传的 function name 还原为 MCP 外部工具名；非 MCP 工具原样返回。"""
+    return _MCP_NAME_BY_SAFE.get(name, name)
 
 
 @dataclass(frozen=True)
@@ -150,6 +172,7 @@ class MCPClientManager:
                     description=tool.description or "",
                     input_schema=tool.input_schema or {},
                 )
+                to_safe_tool_name(external_name)
                 tool_count += 1
 
             conn.session = session
@@ -229,6 +252,22 @@ class MCPClientManager:
 
     def list_tools(self) -> list[MCPTool]:
         return list(self._tools.values())
+
+    def to_function_tools(self) -> list[dict]:
+        """把 MCP 工具目录转成方舟原生 tools schema（function 类型）。"""
+        tools: list[dict] = []
+        for tool in self.list_tools():
+            safe_name = to_safe_tool_name(tool.name)
+            schema = tool.input_schema or {"type": "object", "properties": {}}
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": safe_name,
+                    "description": tool.description or f"调用 MCP 工具 {tool.name}",
+                    "parameters": schema,
+                },
+            })
+        return tools
 
     def is_ready(self) -> bool:
         return bool(self._tools)

@@ -45,7 +45,27 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"[startup] 知识检索预热失败（不影响服务启动）：{exc}", file=sys.stderr, flush=True)
 
+    # Context 暂存区定期清理（pending 批次超 TTL 自动丢弃，见 §11.5）
+    cleanup_task = None
+    try:
+        from services.context_admin_service import cleanup_expired_staging
+
+        async def _staging_cleanup_loop():
+            while True:
+                await asyncio.sleep(3600)
+                try:
+                    await cleanup_expired_staging()
+                except Exception as exc:
+                    print(f"[context] 暂存清理异常：{exc}", file=sys.stderr, flush=True)
+
+        await cleanup_expired_staging()
+        cleanup_task = asyncio.create_task(_staging_cleanup_loop())
+    except Exception as exc:
+        print(f"[startup] 暂存清理任务启动失败（不影响服务）：{exc}", file=sys.stderr, flush=True)
+
     yield
+    if cleanup_task is not None:
+        cleanup_task.cancel()
     await mcp_manager.close()
 
 

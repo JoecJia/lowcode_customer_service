@@ -5,6 +5,7 @@ import { ElMessageBox } from 'element-plus'
 import AgentConfigTab from './admin/AgentConfigTab.vue'
 import FeedbackTab from './admin/FeedbackTab.vue'
 import AccountTab from './admin/AccountTab.vue'
+import MaintenanceAssistant from '../components/MaintenanceAssistant.vue'
 
 const router = useRouter()
 
@@ -90,6 +91,8 @@ const tabs = [
         <AccountTab v-if="activeTab === 'accounts'" />
       </main>
     </div>
+
+    <MaintenanceAssistant />
   </div>
 </template>
 

@@ -51,6 +51,7 @@ def _init_db() -> None:
             CREATE TABLE IF NOT EXISTS sessions (
                 id          TEXT PRIMARY KEY,
                 title       TEXT DEFAULT '',
+                scope       TEXT DEFAULT 'frontend',
                 status      TEXT DEFAULT 'active',
                 user_id     INTEGER REFERENCES users(id),
                 deleted_at  REAL,
@@ -86,6 +87,49 @@ def _init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_feedback_session ON feedback(session_id);
             CREATE INDEX IF NOT EXISTS idx_feedback_user_session ON feedback(user_id, session_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_unique ON feedback(user_id, session_id);
+
+            -- Context 变更批次（确认/回滚的唯一原子单元，见开发文档 §2.2）
+            CREATE TABLE IF NOT EXISTS context_change_batch (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_no       TEXT NOT NULL UNIQUE,
+                session_id     TEXT NOT NULL,
+                operator       TEXT NOT NULL,
+                status         TEXT NOT NULL DEFAULT 'pending',
+                item_count     INTEGER NOT NULL DEFAULT 0,
+                summary        TEXT DEFAULT '',
+                source         TEXT DEFAULT 'agent',
+                restored_from  INTEGER,
+                created_at     REAL NOT NULL,
+                applied_at     REAL,
+                closed_at      REAL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_batch_session_status
+                ON context_change_batch(session_id, status, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_batch_created
+                ON context_change_batch(created_at DESC);
+
+            -- 批次内文件变更明细（审计 + 回滚内容依据，见开发文档 §2.3）
+            CREATE TABLE IF NOT EXISTS context_audit_log (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id     INTEGER NOT NULL,
+                item_index   INTEGER NOT NULL DEFAULT 0,
+                operator     TEXT NOT NULL,
+                action       TEXT NOT NULL,
+                source       TEXT NOT NULL DEFAULT 'agent',
+                target       TEXT NOT NULL,
+                base_hash    TEXT,
+                new_hash     TEXT,
+                backup_path  TEXT DEFAULT '',
+                created_at   REAL NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_context_audit_batch
+                ON context_audit_log(batch_id, item_index);
+            CREATE INDEX IF NOT EXISTS idx_context_audit_created
+                ON context_audit_log(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_context_audit_target
+                ON context_audit_log(target, id DESC);
         """)
 
         conn.commit()
@@ -100,6 +144,7 @@ def _run_migrations() -> None:
         # sessions 表补列
         ("sessions", "user_id", "INTEGER REFERENCES users(id)"),
         ("sessions", "deleted_at", "REAL"),
+        ("sessions", "scope", "TEXT DEFAULT 'frontend'"),
         # users 表补列
         ("users", "can_chat", "INTEGER DEFAULT 1"),
         ("users", "can_admin", "INTEGER DEFAULT 0"),
@@ -122,6 +167,7 @@ def _run_migrations() -> None:
             "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_user_deleted ON sessions(user_id, deleted_at)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_scope_updated ON sessions(scope, updated_at DESC)",
         ]
         for sql in index_sql:
             try:

@@ -115,6 +115,11 @@ async def chat(request: ChatRequest, current_user: Optional[dict] = Depends(get_
     history_msgs = store.get_messages(session_id)[0]  # (messages, has_more)
     history_for_model: list[dict] = []
     for m in history_msgs:
+        # 旧数据兼容：<task_result> 曾是 role=user 的假用户消息，不进入模型上下文。
+        if m["role"] == "user" and "<task_result>" in str(m.get("content") or ""):
+            continue
+        if m["role"] == "tool":
+            continue
         attachments = m.get("attachments") or []
         content = build_user_content(m["content"], attachments) if attachments else m["content"]
         history_for_model.append({"role": m["role"], "content": content})

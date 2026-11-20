@@ -48,12 +48,14 @@ def iter_md_files(base_dir: str) -> list[str]:
         os.path.join(base_dir, "agent_config", "skills"),
     ]
     md_files: list[str] = []
+    skip_dirs = {".faiss", ".staging", ".backup"}
     for root in roots:
         if not os.path.isdir(root):
             continue
-        for dirpath, _, filenames in os.walk(root):
-            if ".faiss" in dirpath:
-                continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            # 剪枝：连遍历都不进入暂存区/备份区/索引目录，
+            # 否则全量重建会把未确认草稿与历史备份写入索引（见开发文档 §11.9）
+            dirnames[:] = [d for d in dirnames if d not in skip_dirs]
             for fn in filenames:
                 if fn.lower().endswith(".md"):
                     md_files.append(os.path.join(dirpath, fn))

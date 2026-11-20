@@ -27,10 +27,22 @@ class SessionStore:
 
 
 
-    def create_session(self, title: str = "", user_id: int | None = None) -> str:
+    def create_session(
+        self,
+        title: str = "",
+        user_id: int | None = None,
+        scope: str = "frontend",
+    ) -> str:
+        """创建会话。scope=frontend 前台客服 / admin 后台维护（见开发文档 §2.1）。"""
         sid = uuid.uuid4().hex
         now = time.time()
-        welcome_msg = {"role": "assistant", "content": "我是低代码平台智能客服，请问我有什么可以帮您？"}
+        welcome = (
+            "您好，我是后台维护助手。我可以帮您定位、读取和维护知识库文档，"
+            "修改会先生成变更草稿、在对话内确认后才生效。请告诉我您想修改什么？"
+            if scope == "admin"
+            else "我是低代码平台智能客服，请问我有什么可以帮您？"
+        )
+        welcome_msg = {"role": "assistant", "content": welcome}
         with self._lock:
             self._temp_sessions[sid] = {
                 "messages": [welcome_msg],
@@ -39,8 +51,9 @@ class SessionStore:
             }
         with get_db() as conn:
             conn.execute(
-                "INSERT INTO sessions (id, title, status, user_id, created_at, updated_at) VALUES (?, ?, 'active', ?, ?, ?)",
-                (sid, title, user_id, now, now),
+                "INSERT INTO sessions (id, title, scope, status, user_id, created_at, updated_at) "
+                "VALUES (?, ?, ?, 'active', ?, ?, ?)",
+                (sid, title, scope, user_id, now, now),
             )
             conn.execute(
                 "INSERT INTO messages (session_id, role, content, reasoning_content, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -219,6 +232,18 @@ class SessionStore:
             conn.commit()
         self._evict_temp(session_id)
 
+    def session_exists(self, session_id: str) -> bool:
+        """会话是否存在（不看 user_id）。
+
+        后台 admin 会话设计为共享、不绑定个人（user_id=None），
+        因此不能用 get_session_owner 判空来代表「会话不存在」。
+        """
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        return row is not None
+
     def get_session_owner(self, session_id: str) -> int | None:
         """获取会话的 user_id，用于鉴权"""
         with get_db() as conn:
@@ -230,6 +255,17 @@ class SessionStore:
             if row:
                 return row["user_id"]
         return None
+
+    def get_session_scope(self, session_id: str) -> str | None:
+        """读取会话归属（frontend/admin），用于前后台 scope 校验。"""
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT scope FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if row and row[0]:
+                return row[0]
+            # 旧库迁移后 scope 有默认值，理论上不会走到这里；兜底为 frontend
+            return "frontend" if row else None
 
     def is_session_deleted(self, session_id: str) -> bool:
         """检查会话是否已被软删除"""
@@ -287,18 +323,25 @@ class SessionStore:
         limit: int = 10,
         offset: int = 0,
         user_id: int | None = None,
+        scope: str | None = None,
     ) -> tuple[list[dict], int, bool]:
-        """返回 (sessions, total, has_more)，按 updated_at 倒序，仅返回未删除的会话"""
+        """返回 (sessions, total, has_more)，按 updated_at 倒序，仅返回未删除的会话。
+
+        scope=None 时不按归属过滤（兼容旧调用）；前台传 'frontend'、后台传 'admin'。
+        """
         with get_db() as conn:
             conn.row_factory = sqlite3.Row
 
             # 查询条件和参数
+            clauses = ["deleted_at IS NULL"]
+            params_base: tuple = ()
             if user_id is not None:
-                where = "WHERE user_id = ? AND deleted_at IS NULL"
-                params_base = (user_id,)
-            else:
-                where = "WHERE deleted_at IS NULL"
-                params_base = ()
+                clauses.append("user_id = ?")
+                params_base += (user_id,)
+            if scope is not None:
+                clauses.append("scope = ?")
+                params_base += (scope,)
+            where = "WHERE " + " AND ".join(clauses)
 
             # 总数
             total_row = conn.execute(
@@ -312,6 +355,7 @@ class SessionStore:
                 f"""SELECT
                     s.id,
                     s.title,
+                    s.scope,
                     s.status,
                     s.user_id,
                     s.created_at,
