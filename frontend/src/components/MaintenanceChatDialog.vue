@@ -19,8 +19,10 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const TEXTAREA_MAX = 120
 
 onMounted(async () => {
-  if (!chat.tabs.value.length) await chat.createTab()
+  // 优先恢复上次未关闭的会话，没有可恢复的才新建（避免每打开一次就多一个空会话）
+  if (!chat.tabs.value.length && !(await chat.restoreTabs())) await chat.createTab()
   nextTick(autoResizeTextarea)
+  scrollBottom()
 })
 
 function scrollBottom() { nextTick(() => { if (messageArea.value) messageArea.value.scrollTop = messageArea.value.scrollHeight }) }
@@ -55,13 +57,16 @@ function onHistoryRenamed(id: string, title: string) {
   if (tab) { tab.title = title; tab.titleStatus = 'ready' }
 }
 
-async function onBatchConfirmed(tab: ChatTab, batchNo: string, action: 'apply' | 'discard') {
-  const resp = await chat.confirmBatch(tab, batchNo, action)
+async function onBatchConfirmed(
+  tab: ChatTab, batchId: number | undefined, batchNo: string, action: 'apply' | 'discard',
+) {
+  const resp = await chat.confirmBatch(tab, batchId, batchNo, action)
   if (resp.ok) {
     ElMessage.success(action === 'apply' ? '已并入知识库' : '已取消该批次')
   } else {
     const status = resp.status
     if (status === 409) ElMessage.error('文件已被修改，批次已作废，请基于最新版本重新生成')
+    else if (status === 0) ElMessage.error('批次信息缺失，请重新打开助手后重试')
     else ElMessage.error('操作失败')
   }
 }
@@ -179,22 +184,21 @@ function avatarText(msg: UIMessage) { return msg.role === 'assistant' ? 'AI' : '
               </div>
             </div>
           </div>
-
-          <!-- 变更卡片 + 批次确认条 -->
-          <template v-if="msg.role === 'assistant'">
-            <div v-for="group in chat.getBatchGroups(activeTab)" :key="group.batch_no" class="change-group">
-              <ContextChangeCard v-for="ch in group.changes" :key="ch.batch_no + '-' + ch.item_index" :item="ch" />
-              <ContextBatchConfirmBar
-                v-if="group.changes.some(c => c.op !== 'applied')"
-                :batch-no="group.batch_no"
-                :item-count="group.item_count"
-                :changes="group.changes"
-                @confirmed="(bn, action) => onBatchConfirmed(activeTab!, bn, action)"
-              />
-              <div v-else class="batch-done">✅ 已并入（批次 #{{ group.batch_no.slice(-6) }}）</div>
-            </div>
-          </template>
         </template>
+
+        <!-- 变更卡片 + 批次确认条：整个会话只渲染一份，避免随助手消息条数重复 -->
+        <div v-for="group in chat.getBatchGroups(activeTab)" :key="group.batch_no" class="change-group">
+          <ContextChangeCard v-for="ch in group.changes" :key="ch.batch_no + '-' + ch.item_index" :item="ch" />
+          <ContextBatchConfirmBar
+            v-if="group.changes.some(c => c.op !== 'applied')"
+            :batch-id="group.batch_id"
+            :batch-no="group.batch_no"
+            :item-count="group.item_count"
+            :changes="group.changes"
+            @confirmed="(id, bn, action) => onBatchConfirmed(activeTab!, id, bn, action)"
+          />
+          <div v-else class="batch-done">✅ 已并入（批次 #{{ group.batch_no.slice(-6) }}）</div>
+        </div>
       </template>
     </div>
 

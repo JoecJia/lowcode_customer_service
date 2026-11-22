@@ -89,9 +89,31 @@ def _write_text(path: str, content: str) -> None:
     os.replace(tmp, path)
 
 
+def _normalize_rel_path(rel_path: str) -> str:
+    """归一化模型常见的路径写法，统一成 context/ 相对路径。
+
+    知识检索结果里展示的是 agent_config/context/...，模型经常照抄过来，
+    这里先做前缀归一，避免因路径前缀不同被判非法而浪费一轮工具调用。
+    """
+    p = (rel_path or "").strip().replace("\\", "/")
+    marker = "agent_config/context/"
+    idx = p.find(marker)
+    if idx >= 0:
+        return p[idx + len("agent_config/"):]
+    idx = p.find("/context/")
+    if idx >= 0:
+        return p[idx + 1:]
+    while p.startswith("./"):
+        p = p[2:]
+    return p
+
+
 def _resolve_target(rel_path: str) -> str:
     """路径白名单：必须是 context/ 下的 .md，且不得落在 .staging/.backup/.faiss 内。"""
-    if not isinstance(rel_path, str) or not rel_path.startswith("context/") or not rel_path.endswith(".md"):
+    if not isinstance(rel_path, str):
+        raise ValidationError("仅允许编辑 context/ 下的 .md 文件")
+    rel_path = _normalize_rel_path(rel_path)
+    if not rel_path.startswith("context/") or not rel_path.endswith(".md"):
         raise ValidationError("仅允许编辑 context/ 下的 .md 文件")
     abs_path = os.path.realpath(os.path.join(AGENT_CONFIG_DIR, rel_path))
     context_root = os.path.realpath(CONTEXT_DIR)
@@ -173,6 +195,31 @@ def _unified_diff(old: str, new: str, target: str) -> str:
     return text
 
 
+def _staged_items_payload(batch_no: str) -> list[dict]:
+    """读取暂存区明细，生成与 SSE change 事件同构的 items（含 diff）。"""
+    payload: list[dict] = []
+    for it in _load_items(batch_no):
+        meta = it.get("meta") or {}
+        target = meta.get("target") or ""
+        old_path = os.path.join(os.path.dirname(it["new_path"]), "old.md")
+        try:
+            old_text = _read_text(old_path) if os.path.exists(old_path) else ""
+            new_text = _read_text(it["new_path"])
+            diff = _unified_diff(old_text, new_text, target)
+        except OSError:
+            diff = ""
+        payload.append({
+            "target": target,
+            "action": meta.get("op") or "update",
+            "new_hash": meta.get("new_hash"),
+            "backup_path": None,
+            "item_index": it["item_index"],
+            "summary": meta.get("summary") or "",
+            "diff": diff,
+        })
+    return payload
+
+
 def _schedule_warmup() -> None:
     try:
         loop = asyncio.get_running_loop()
@@ -233,7 +280,9 @@ async def handle_context_editor(task: Task, operator: str, session_id: str = "")
 
 
 def _tool_list(path: str) -> str:
-    rel = path if path.startswith("context/") else "context/"
+    rel = _normalize_rel_path(path) or "context/"
+    if not rel.startswith("context/"):
+        rel = "context/"
     root = os.path.realpath(os.path.join(AGENT_CONFIG_DIR, rel))
     if not root.startswith(os.path.realpath(CONTEXT_DIR)):
         return "错误：非法路径"
@@ -258,15 +307,12 @@ def _tool_read(path: str, section: str | None, offset: Any, limit: Any) -> str:
         return f"错误：文件不存在：{path}（新建请用 stage_write）"
     text = _read_text(abs_path)
     if section:
-        pattern = re.compile(rf"^(#+)\s*{re.escape(str(section))}\s*$", re.MULTILINE)
-        m = pattern.search(text)
-        if not m:
-            return f"未找到标题「{section}」。文件大纲：\n" + "\n".join(
+        span = _locate_heading(text, str(section))
+        if not span:
+            return f"未找到标题「{_normalize_heading(str(section)) or section}」。文件大纲：\n" + "\n".join(
                 l for l in text.splitlines() if l.startswith("#")
             )[:2000]
-        start = m.start()
-        nxt = re.search(r"^#+\s", text[m.end():], re.MULTILINE)
-        end = m.end() + nxt.start() if nxt else len(text)
+        start, end = span
         return text[start:end][:6000]
     if offset is not None or limit is not None:
         lines = text.splitlines()
@@ -279,9 +325,11 @@ def _tool_read(path: str, section: str | None, offset: Any, limit: Any) -> str:
 
 async def _tool_stage_write(args: dict, operator: str, session_id: str) -> SkillResult:
     path = (args.get("path") or "").strip()
-    mode = (args.get("mode") or "").strip()
+    mode = (args.get("mode") or "").strip().lower()
     content = args.get("content") or ""
     summary = (args.get("summary") or "")[:50]
+    # 兼容模型把目标章节写在 section（read 的同名字段）或 heading 里，而不是 after_heading
+    heading = args.get("after_heading") or args.get("section") or args.get("heading") or ""
 
     if not session_id:
         return SkillResult("错误：缺少 session_id，无法归入会话批次")
@@ -291,6 +339,9 @@ async def _tool_stage_write(args: dict, operator: str, session_id: str) -> Skill
         abs_target = _resolve_target(path)
     except ValidationError as exc:
         return SkillResult(f"错误：{exc}")
+    # 统一使用「相对 agent_config 的路径」作为 target，避免模型传的
+    # agent_config/context/... 与 context/... 被当成两个不同文件
+    rel_target = os.path.relpath(abs_target, AGENT_CONFIG_DIR).replace("\\", "/")
 
     # 读取当前内容（新建时为空）
     if os.path.exists(abs_target):
@@ -304,7 +355,7 @@ async def _tool_stage_write(args: dict, operator: str, session_id: str) -> Skill
 
     # 按 mode 生成新内容
     try:
-        new_text = _apply_mode(old_text, str(content), mode, args.get("after_heading"))
+        new_text = _apply_mode(old_text, str(content), mode, heading)
     except ValueError as exc:
         return SkillResult(f"错误：{exc}")
 
@@ -332,7 +383,7 @@ async def _tool_stage_write(args: dict, operator: str, session_id: str) -> Skill
     # 同 target 覆盖草稿；新增则追加 item
     item_index = None
     for it in _load_items(batch_no):
-        if it["meta"].get("target") == path and it["meta"].get("base_hash") == base_hash:
+        if it["meta"].get("target") == rel_target and it["meta"].get("base_hash") == base_hash:
             item_index = it["item_index"]
             break
     if item_index is None:
@@ -348,7 +399,7 @@ async def _tool_stage_write(args: dict, operator: str, session_id: str) -> Skill
         "batch_no": batch_no,
         "item_index": item_index,
         "op": op,
-        "target": path,
+        "target": rel_target,
         "mode": mode,
         "base_hash": base_hash,
         "new_hash": _sha256_bytes(new_text.encode("utf-8")),
@@ -361,15 +412,20 @@ async def _tool_stage_write(args: dict, operator: str, session_id: str) -> Skill
 
     if new_batch:
         with get_db() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 "INSERT INTO context_change_batch "
                 "(batch_no, session_id, operator, status, item_count, summary, source, created_at) "
                 "VALUES (?, ?, ?, 'pending', ?, ?, 'agent', ?)",
                 (batch_no, session_id, operator, batch["item_count"], summary, time.time()),
             )
+            batch_id = cursor.lastrowid
             conn.commit()
     else:
         with get_db() as conn:
+            row = conn.execute(
+                "SELECT id FROM context_change_batch WHERE batch_no = ?", (batch_no,)
+            ).fetchone()
+            batch_id = row[0] if row else None
             conn.execute(
                 "UPDATE context_change_batch SET item_count = ?, summary = ? WHERE batch_no = ?",
                 (batch["item_count"], summary, batch_no),
@@ -377,27 +433,70 @@ async def _tool_stage_write(args: dict, operator: str, session_id: str) -> Skill
             conn.commit()
     _save_batch(batch_no, batch)
 
-    diff = _unified_diff(old_text, new_text, path)
+    diff = _unified_diff(old_text, new_text, rel_target)
     change_event = {
         "name": "change",
         "data": {
+            # 确认/取消接口按数字主键调用，前端必须拿到 batch_id
+            "batch_id": batch_id,
             "batch_no": batch_no,
             "item_index": item_index,
             "item_count": batch["item_count"],
             "op": op,
-            "target": path,
+            "target": rel_target,
             "summary": summary,
             "diff": diff,
         },
     }
     text = (
         f"已生成变更：批次 {batch_no} 的第 {item_index + 1} 项（待确认）\n"
-        f"目标：{path}（{mode}）\n摘要：{summary}\n"
+        f"目标：{rel_target}（{mode}）\n摘要：{summary}\n"
         f"变更后字符数：{len(new_text) - len(old_text):+d}\n"
         f"草稿已暂存，未写入知识库。如需调整请继续说明；全部改动无误后，"
         f"请在下方批次确认条点击「确认并入（N 项）」一次性确认整个批次，不要声称已生效。"
     )
     return SkillResult(text, [change_event])
+
+
+def _normalize_heading(raw: str | None) -> str:
+    """归一化章节标题：去掉模型常带的 # 前缀、引号与首尾空白。"""
+    h = (raw or "").strip()
+    for _ in range(2):  # # 前缀与引号可能交替出现，做两轮清理
+        h = re.sub(r"^#{1,6}\s*", "", h)
+        h = h.strip().strip("\"'“”‘’「」").strip()
+    return h
+
+
+def _locate_heading(text: str, heading: str | None) -> tuple[int, int] | None:
+    """定位章节标题，返回 (标题行起点, 本节结束位置)。
+
+    先做精确匹配；失败时容忍模型漏写「Q: 」之类的前缀，
+    但只有在整个文件里唯一命中一个标题时才接受，避免误改相邻章节。
+    """
+    h = _normalize_heading(heading)
+    if not h:
+        return None
+
+    def _span(target: str) -> tuple[int, int] | None:
+        pat = re.compile(rf"^(#+)\s*{re.escape(target)}\s*$", re.MULTILINE)
+        m = pat.search(text)
+        if not m:
+            return None
+        nxt = re.search(r"^#+\s", text[m.end():], re.MULTILINE)
+        end = m.end() + nxt.start() if nxt else len(text)
+        return m.start(), end
+
+    span = _span(h)
+    if span:
+        return span
+    candidates = {
+        _normalize_heading(line)
+        for line in text.splitlines()
+        if line.startswith("#") and _normalize_heading(line).endswith(h)
+    }
+    if len(candidates) == 1:
+        return _span(candidates.pop())
+    return None
 
 
 def _apply_mode(old: str, content: str, mode: str, after_heading: str | None) -> str:
@@ -406,20 +505,25 @@ def _apply_mode(old: str, content: str, mode: str, after_heading: str | None) ->
     if mode == "append":
         return old.rstrip() + "\n" + content.lstrip() + "\n"
     if mode in ("insert_after", "replace_section"):
-        heading = (after_heading or "").strip()
+        heading = _normalize_heading(after_heading)
         if not heading:
-            raise ValueError(f"{mode} 需要 after_heading 参数")
-        pattern = re.compile(rf"^(#+)\s*{re.escape(heading)}\s*$", re.MULTILINE)
-        m = pattern.search(old)
-        if not m:
-            raise ValueError(f"未找到标题「{heading}」")
-        nxt = re.search(r"^#+\s", old[m.end():], re.MULTILINE)
-        end = m.end() + nxt.start() if nxt else len(old)
+            raise ValueError(
+                f"{mode} 需要 after_heading 参数（目标章节标题，不含 # 号）。"
+                "可先用 read 查看文件大纲，确认要定位的标题原文。"
+            )
+        span = _locate_heading(old, heading)
+        if not span:
+            headings = "\n".join(l for l in old.splitlines() if l.startswith("#"))[:1500]
+            raise ValueError(
+                f"未找到标题「{heading}」。文件现有标题：\n{headings or '（该文件暂无标题）'}"
+            )
+        start, end = span
         if mode == "insert_after":
-            insert_pos = end
-            return old[:insert_pos].rstrip() + "\n" + content.lstrip() + "\n" + old[insert_pos:]
-        return old[:m.start()] + content.rstrip() + "\n\n" + old[end:]
-    raise ValueError(f"不支持的 mode：{mode}")
+            return old[:end].rstrip() + "\n" + content.lstrip() + "\n" + old[end:]
+        return old[:start] + content.rstrip() + "\n\n" + old[end:]
+    raise ValueError(
+        f"不支持的 mode：{mode}（可用 append / insert_after / replace_section / replace_file）"
+    )
 
 
 def _tool_list_changes(session_id: str) -> str:
@@ -608,6 +712,12 @@ async def rollback_batch(batch_id: int, operator: str) -> dict:
                     (new_id, row["item_index"], operator, row["target"], row["new_hash"],
                      row["base_hash"], row["backup_path"], now),
                 )
+            # 原批次置为已回滚：变更记录里不再显示「一键回滚」按钮，
+            # 避免对同一条已还原的记录反复点击（再次回滚只会命中预检失败）。
+            conn.execute(
+                "UPDATE context_change_batch SET status='rolled_back', closed_at=? WHERE id=?",
+                (now, batch_id),
+            )
             conn.commit()
         return {"batch_no": new_no, "item_count": len(items), "index_updated": ok}
 
@@ -636,7 +746,11 @@ def list_batches(
     statuses: list[str] | None = None,
     limit: int = 50,
 ) -> list[dict]:
-    """列出批次及文件明细。statuses 为多状态列表（如 applied/rolled_back）。"""
+    """列出批次及文件明细。statuses 为多状态列表（如 applied/rolled_back）。
+
+    pending 批次的明细来自暂存区（审计表只在 apply 之后才有记录），
+    并附带统一 diff，供前端重开会话时还原「变更卡片 + 批次确认条」。
+    """
     clauses = []
     params: list[Any] = []
     if session_id:
@@ -658,11 +772,17 @@ def list_batches(
         ).fetchall()
         result = []
         for row in rows:
+            batch_dict = dict(row)
+            if row["status"] == "pending":
+                staged = _staged_items_payload(row["batch_no"])
+                if staged:
+                    batch_dict["items"] = staged
+                    result.append(batch_dict)
+                    continue
             items = conn.execute(
                 "SELECT target, action, new_hash, backup_path, item_index FROM context_audit_log "
                 "WHERE batch_id = ? ORDER BY item_index", (row["id"],)
             ).fetchall()
-            batch_dict = dict(row)
             batch_dict["items"] = [
                 {**dict(i), "summary": ""} for i in items
             ]

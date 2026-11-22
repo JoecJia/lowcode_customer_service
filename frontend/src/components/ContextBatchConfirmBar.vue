@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import type { ContextChange } from '../composables/useMaintenanceChat'
 
 const props = defineProps<{
+  /** 批次数字主键，确认/取消接口按它调用 */
+  batchId?: number
   batchNo: string
   itemCount: number
   changes: ContextChange[]
 }>()
 const emit = defineEmits<{
-  confirmed: [batchNo: string, action: 'apply' | 'discard', ok: boolean, status?: number]
+  confirmed: [batchId: number | undefined, batchNo: string, action: 'apply' | 'discard']
 }>()
 const busy = ref(false)
 
 async function confirm(action: 'apply' | 'discard') {
   const targets = props.changes.map(c => c.target).join('\n')
   try {
+    // 层级由 main.ts 的 ElementPlus zIndex=3000 保证，高于维护助手抽屉（2500）
     await ElMessageBox.confirm(
       `${action === 'apply' ? '确认并入' : '取消'}该批次的 ${props.itemCount} 项变更？\n目标文件：\n${targets}`,
       '确认操作', { type: 'warning', confirmButtonText: '确定', cancelButtonText: '取消' },
@@ -23,18 +26,9 @@ async function confirm(action: 'apply' | 'discard') {
   } catch { return }
   busy.value = true
   try {
-    emit('confirmed', props.batchNo, action, true)
+    emit('confirmed', props.batchId, props.batchNo, action)
   } finally { busy.value = false }
 }
-
-function onConfirmResult(ok: boolean, status?: number) {
-  busy.value = false
-  if (!ok && status === 409) {
-    ElMessage.error('文件已被修改，批次已作废，请基于最新版本重新生成')
-  }
-}
-
-defineExpose({ onConfirmResult })
 </script>
 
 <template>

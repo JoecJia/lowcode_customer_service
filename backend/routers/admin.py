@@ -337,12 +337,13 @@ async def apply_context_batch(
     admin: dict = Depends(_require_admin_agent),
 ):
     with get_db() as conn:
+        # get_db() 未设置 row_factory，必须按位置取值，否则 row["batch_no"] 会抛 TypeError
         row = conn.execute("SELECT batch_no FROM context_change_batch WHERE id = ?", (batch_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="批次不存在")
     operator = str(admin.get("username") or admin.get("sub") or "admin")
     try:
-        result = await apply_batch(row["batch_no"], operator)
+        result = await apply_batch(row[0], operator)
     except ConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValidationError as exc:
@@ -366,7 +367,7 @@ async def discard_context_batch(
     if not row:
         raise HTTPException(status_code=404, detail="批次不存在")
     try:
-        discard_batch(row["batch_no"])
+        discard_batch(row[0])
     except ConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"ok": True}

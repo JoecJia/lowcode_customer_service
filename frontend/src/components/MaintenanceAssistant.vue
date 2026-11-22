@@ -5,12 +5,28 @@ import MaintenanceChatDialog from './MaintenanceChatDialog.vue'
 const expanded = ref(false)
 const enabled = ref(false)
 
-// 抽屉宽度可拖拽调整（贴右侧，左移变宽）
-const drawerWidth = ref(480)
+// 抽屉宽度可拖拽调整（贴右侧，左移变宽），宽度记在本地，下次打开保持一致
+const WIDTH_KEY = 'admin_assistant_width'
 const MIN_WIDTH = 320
+const DEFAULT_WIDTH = 480
+
+function clampWidth(width: number): number {
+  return Math.max(MIN_WIDTH, Math.min(window.innerWidth - 120, width))
+}
+function readSavedWidth(): number {
+  try {
+    const saved = Number(localStorage.getItem(WIDTH_KEY))
+    return Number.isFinite(saved) && saved > 0 ? clampWidth(saved) : DEFAULT_WIDTH
+  } catch { return DEFAULT_WIDTH }
+}
+function saveWidth(width: number) {
+  try { localStorage.setItem(WIDTH_KEY, String(Math.round(width))) } catch { /* 存储不可用时忽略 */ }
+}
+
+const drawerWidth = ref(readSavedWidth())
 const isResizing = ref(false)
 let resizeStartX = 0
-let resizeStartWidth = 480
+let resizeStartWidth = DEFAULT_WIDTH
 
 function onResizeStart(e: MouseEvent) {
   e.preventDefault()
@@ -25,7 +41,7 @@ function onResizeStart(e: MouseEvent) {
 function onResizeMove(e: MouseEvent) {
   if (!isResizing.value) return
   const delta = resizeStartX - e.clientX
-  drawerWidth.value = Math.max(MIN_WIDTH, Math.min(window.innerWidth - 120, resizeStartWidth + delta))
+  drawerWidth.value = clampWidth(resizeStartWidth + delta)
 }
 function onResizeEnd() {
   if (!isResizing.value) return
@@ -34,6 +50,7 @@ function onResizeEnd() {
   document.removeEventListener('mouseup', onResizeEnd)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
+  saveWidth(drawerWidth.value)
 }
 onBeforeUnmount(onResizeEnd)
 

@@ -201,6 +201,8 @@ export interface ContextBatchItem {
   backup_path?: string
   item_index?: number
   summary: string
+  /** 仅 pending 批次返回：暂存内容与正式文件的统一 diff */
+  diff?: string
 }
 export interface ContextBatch {
   id: number
@@ -211,15 +213,18 @@ export interface ContextBatch {
   status: 'pending' | 'applied' | 'discarded' | 'rolled_back'
   item_count: number
   summary: string
+  /** agent | rollback：rollback 表示这是一条回滚动作记录 */
+  source?: string
   restored_from: number | null
   created_at: number
   applied_at: number | null
   items: ContextBatchItem[]
 }
 
-/** status 传 'applied,rolled_back'（逗号分隔多状态） */
-export async function getContextBatches(status: string, limit = 50) {
+/** status 传 'applied,rolled_back'（逗号分隔多状态）；sessionId 用于按会话还原待确认草稿 */
+export async function getContextBatches(status: string, limit = 50, sessionId?: string) {
   const qs = new URLSearchParams({ status, limit: String(limit) })
+  if (sessionId) qs.set('session_id', sessionId)
   return adminAuthFetch(`${BASE}/context/batches?${qs}`)
 }
 export async function applyContextBatch(batchId: number) {

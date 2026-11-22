@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getContextBatches, rollbackContextBatch, type ContextBatch,
@@ -26,12 +26,32 @@ async function rollback(batch: ContextBatch) {
   try {
     await ElMessageBox.confirm(
       `确定回滚批次 #${batch.batch_no.slice(-6)}（${batch.item_count} 项）吗？将还原到确认前状态。`,
-      '一键回滚', { type: 'warning' },
+      '一键回滚',
+      {
+        type: 'warning',
+        // Element Plus 未配置中文 locale，不显式指定会显示 OK / Cancel
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+      },
     )
   } catch { return }
   const resp = await rollbackContextBatch(batch.id)
   if (resp.ok) { ElMessage.success('已回滚并更新索引'); load() }
   else ElMessage.error('回滚失败')
+}
+/** 已被回滚的原批次 id（回滚会产生一条 source=rollback 的新记录，指回原批次） */
+const rolledBackIds = computed(() => new Set(
+  batches.value
+    .filter(b => b.source === 'rollback' && typeof b.restored_from === 'number')
+    .map(b => b.restored_from as number),
+))
+
+/** 历史数据里回滚后原批次可能仍是 applied，这里统一按「已回滚」展示 */
+function displayStatus(b: ContextBatch) {
+  return b.status === 'applied' && rolledBackIds.value.has(b.id) ? 'rolled_back' : b.status
+}
+function canRollback(b: ContextBatch) {
+  return b.status === 'applied' && !rolledBackIds.value.has(b.id)
 }
 function statusLabel(s: string) {
   return s === 'applied' ? '已生效' : s === 'rolled_back' ? '已回滚' : s
@@ -44,9 +64,9 @@ function statusLabel(s: string) {
       <div v-for="b in batches" :key="b.id" class="batch-item">
         <div class="batch-head">
           <span class="batch-no">#{{ b.batch_no.slice(-6) }}</span>
-          <span class="batch-status" :class="b.status">{{ statusLabel(b.status) }}</span>
+          <span class="batch-status" :class="displayStatus(b)">{{ statusLabel(displayStatus(b)) }}</span>
           <span class="batch-meta">{{ b.item_count }} 项 · {{ b.operator }} · {{ new Date(b.created_at * 1000).toLocaleString() }}</span>
-          <el-button v-if="b.status === 'applied'" size="small" type="warning" @click="rollback(b)">一键回滚</el-button>
+          <el-button v-if="canRollback(b)" size="small" type="warning" @click="rollback(b)">一键回滚</el-button>
         </div>
         <div class="batch-summary">{{ b.summary }}</div>
         <div class="batch-files">

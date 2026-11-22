@@ -447,6 +447,10 @@ async def agent_loop_stream(
                 "content": (
                     "【系统指令】工具调用已达上限。请立即停止调用任何工具，"
                     "直接基于上文已经获得的信息给出最终回答。"
+                    "注意：如果你还没有成功执行 context_editor.stage_write"
+                    "（即没有收到「已生成变更：批次…」的工具结果），"
+                    "必须明确告知管理员本次没有生成草稿、需要重试，"
+                    "严禁声称已生成草稿或已修改知识库。"
                 ),
             }
         ]
@@ -654,16 +658,23 @@ async def agent_loop_stream(
                 f"{task.task_type}|{task.query}|{task.top_k}|"
                 f"{json.dumps(arguments, sort_keys=True, ensure_ascii=False)}"
             )
+            # 多动作工具（context_editor 的 list/read/stage_write/list_changes 共用一个工具名）
+            # 必须按 tool:action 分别计数：否则「列目录 → 读文件 → 写草稿」三步就会撞上
+            # 同技能上限，stage_write 永远执行不到，草稿和确认卡片都不会出现。
+            skill_key = task.task_type
+            action = arguments.get("action")
+            if isinstance(action, str) and action.strip():
+                skill_key = f"{task.task_type}:{action.strip()}"
             identical_task_counts[fingerprint] = identical_task_counts.get(fingerprint, 0) + 1
-            skill_call_counts[task.task_type] = skill_call_counts.get(task.task_type, 0) + 1
+            skill_call_counts[skill_key] = skill_call_counts.get(skill_key, 0) + 1
 
             if identical_task_counts[fingerprint] > MAX_IDENTICAL_TASK_CALLS:
                 async for chunk in close_out("检测到完全相同的任务被重复执行，正在为您整理答复…"):
                     yield chunk
                 return
-            if skill_call_counts[task.task_type] > MAX_SAME_SKILL_CALLS:
+            if skill_call_counts[skill_key] > MAX_SAME_SKILL_CALLS:
                 async for chunk in close_out(
-                    f"技能 {task.task_type} 调用次数过多，正在为您整理答复…"
+                    f"技能 {skill_key} 调用次数过多，正在为您整理答复…"
                 ):
                     yield chunk
                 return

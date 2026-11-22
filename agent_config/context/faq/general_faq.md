@@ -46,7 +46,7 @@ A: 请您查收！😆https://document.chaoxing.com/web/#/102/1221
 ### Q: 数据工厂使用说明
 A: 请您查收！🥰https://document.chaoxing.com/web/#/103/1237
 
-**相似问法：** 数据工程说明文档
+**相似问法：** 数据工厂说明文档
 
 ### Q: 审批使用说明
 A: 请您查收！😊https://document.chaoxing.com/web/#/99
