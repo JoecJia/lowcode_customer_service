@@ -12,13 +12,26 @@ import {
   submitFeedback,
   checkFeedback,
 } from '../api/chat'
-import type { Session } from '../api/chat'
+import type { AttachmentPayload, ChatAttachment, ChatMessage, Session } from '../api/chat'
+import { getAttachmentContent } from '../api/attachments'
 import { useAuth } from '../composables/useAuth'
+import { useSessionRuntimes } from '../composables/useSessionRuntimes'
+import ChatInput from '../components/ChatInput.vue'
+import AttachmentCard from '../components/AttachmentCard.vue'
 
 const { currentUser, logout } = useAuth()
 
 // ==================== DEBUG 开关 ====================
-const DEBUG_STREAM = true
+// 与 api/chat.ts 保持一致：逐 token 日志默认关闭。
+// 开启方式：控制台执行 localStorage.setItem('chat_debug', '1') 后刷新页面。
+function readDebugFlag(): boolean {
+  try {
+    return localStorage.getItem('chat_debug') === '1'
+  } catch {
+    return false
+  }
+}
+const DEBUG_STREAM = import.meta.env.DEV && readDebugFlag()
 
 // ==================== 侧边栏状态 ====================
 const sessions = ref<Session[]>([])
@@ -72,7 +85,6 @@ function onResizerMouseUp() {
 
 // ==================== 对话状态 ====================
 const currentSessionId = ref('')
-const messages = ref<UIMessage[]>([])
 const loadingMessages = ref(false)
 const hasMoreMessages = ref(false)
 
@@ -80,12 +92,6 @@ const currentTitle = computed(() => {
   const s = (sessions.value || []).find(s => s.id === currentSessionId.value)
   return s?.title || '新对话'
 })
-
-// ==================== 输入状态 ====================
-const inputText = ref('')
-const isStreaming = ref(false)
-const isComposing = ref(false)
-let abortController: AbortController | null = null
 
 // ==================== 编辑状态 ====================
 const editingSessionId = ref('')
@@ -103,19 +109,46 @@ const hasFeedback = ref(false)
 
 // ==================== 图片预览状态 ====================
 const previewImage = ref<string | null>(null)
+let previewBlobUrl: string | null = null
 
 // ==================== 类型 ====================
+interface RetrievalImage {
+  alt: string
+  path: string
+  source?: string
+}
+
 interface TaskInfo {
   type: string
   result: string
+  /** 检索词（仅 knowledge_retrieval） */
+  query?: string
+  /** 从 result 拆出的命中文本，保留原始换行 */
+  hitText?: string
+  /** 从 result 拆出的命中图片 */
+  images?: RetrievalImage[]
+}
+
+/** 思考过程的时间线节点，与后端 _StepBuilder 落库的 steps 一一对应 */
+interface ThinkingStep {
+  kind: 'reasoning' | 'task'
+  /** reasoning 片段原文（连续 token 已合并） */
+  text?: string
+  /** 清洗后的缓存，随节流渲染更新，避免模板对每个 token 重跑全文正则 */
+  clean?: string
+  /** task 节点的结构化结果 */
+  task?: TaskInfo
 }
 
 interface UIMessage {
   id?: number
   role: 'user' | 'assistant'
   content: string
+  /** 用户上传的图片/PDF；previewUrl 用于发送后即时预览 */
+  attachments?: (ChatAttachment & { previewUrl?: string })[]
+  /** 整段思维链，仅用于「是否有思考过程」判定与兼容，渲染以 steps 为准 */
   reasoning?: string
-  tasks?: TaskInfo[]
+  steps?: ThinkingStep[]
   showThinking?: boolean
   isStreaming?: boolean
   showRegenerate?: boolean
@@ -123,9 +156,44 @@ interface UIMessage {
   created_at?: number
   /** 节流后的 markdown 渲染 HTML，流式期间每 150ms 更新一次，防止图片闪动 */
   _renderedHtml?: string
+  /** 下一个 reasoning token 是否另起节点，与后端 _StepBuilder.break_reasoning 同构 */
+  _stepBreak?: boolean
 }
 
+// ==================== 会话运行时（按会话隔离生成状态） ====================
+const {
+  runtimes,
+  ensureRuntime,
+  isActiveCallback,
+  markGenerating,
+  finishGenerating,
+  markUnread,
+  markRead,
+  disposeRuntime,
+  disposeAllRuntimes,
+  isSessionGenerating,
+} = useSessionRuntimes<UIMessage>()
+
+const currentRuntime = computed(() =>
+  currentSessionId.value ? ensureRuntime(currentSessionId.value) : undefined,
+)
+/** 当前会话是否正在生成；输入框 / 停止按钮 / 顶部徽标都以此为准 */
+const isCurrentStreaming = computed(() => !!currentRuntime.value?.generating)
+/** 视图只渲染当前会话的缓存（含流式半成品） */
+const currentMessages = computed<UIMessage[]>(() => currentRuntime.value?.messages || [])
+/** 文本草稿按会话隔离：切换会话互不干扰，停止后保留 */
+const currentDraft = computed({
+  get: () => currentRuntime.value?.draft || '',
+  set: (v: string) => { if (currentRuntime.value) currentRuntime.value.draft = v },
+})
+
 // ==================== 工具函数 ====================
+
+// 流式渲染期间不产出 <img>：_renderedHtml 每 150ms 被整体替换（v-html 是全量重建），
+// 若期间渲染出图片，每个 <img> 每 150ms 就被销毁重建一次、重新发起请求
+// （实测同一次回答中同一张图被重复请求数十次）。
+// 流式结束后（isStreaming=false）再完整渲染，此时每张图只请求一次。
+let _streamingRender = false
 
 // 自定义 marked 渲染器：将相对路径的图片 src 转为服务端绝对路径
 const markedRenderer = new marked.Renderer()
@@ -135,6 +203,10 @@ markedRenderer.image = function (token: any): string {
   // ../assets/xxx → /assets/xxx  （兜底修正，防止 LLM 输出的相对路径图片显示为裂图）
   if (href.startsWith('../assets/') || href.includes('/../assets/')) {
     token.href = href.replace(/(?:\.\.\/)+assets\//g, '/assets/')
+  }
+  if (_streamingRender) {
+    // 流式期间用占位文本代替图片，避免反复重建 <img>
+    return `<span class="img-stream-placeholder">[图片${token.text ? '：' + token.text : ''}]</span>`
   }
   return originalImageRenderer(token)
 }
@@ -150,10 +222,25 @@ function renderMarkdown(text: string): string {
 const RENDER_THROTTLE_MS = 150
 const _renderTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
 
+function syncDerived(msg: UIMessage) {
+  // 流式期间禁用图片渲染，避免每 150ms 重建 <img> 导致图片被反复请求
+  _streamingRender = !!msg.isStreaming
+  try {
+    msg._renderedHtml = renderMarkdown(msg.content)
+  } finally {
+    _streamingRender = false
+  }
+  // 各 reasoning 步骤的清洗（两次全文正则 + trim）一并节流：
+  // 否则模板会在每个 token 上对全文重算，整体复杂度 O(n²)
+  for (const step of msg.steps || []) {
+    if (step.kind === 'reasoning') step.clean = cleanReasoning(step.text || '')
+  }
+}
+
 function scheduleRender(msg: UIMessage) {
   if (!msg.isStreaming) {
     // 非流式（已完成/历史消息/出错）：立即渲染
-    msg._renderedHtml = renderMarkdown(msg.content)
+    syncDerived(msg)
     return
   }
 
@@ -162,12 +249,108 @@ function scheduleRender(msg: UIMessage) {
 
   _renderTimers.set(msg, setTimeout(() => {
     _renderTimers.delete(msg)
-    msg._renderedHtml = renderMarkdown(msg.content)
+    syncDerived(msg)
   }, RENDER_THROTTLE_MS))
 }
 
 function cleanReasoning(text: string): string {
   return text.replace(/<\/?think>/gi, '').replace(/<THINK_V2>/gi, '').trim()
+}
+
+// ==================== knowledge_retrieval 结果解析 ====================
+// format_knowledge_retrieval_result 的输出固定为：
+//   ### 命中文本
+//   ...
+//   ### 命中图片（可选）
+//   使用 ![图片说明](图片路径) 的 markdown 格式展示图片，例如：
+//   - ![alt](/assets/xxx.png)
+//     source: context/xxx.md
+// 拆开后可保留命中文本原始换行，并把图片单独列出；解析失败时整体作为正文，保证不丢内容。
+const RETRIEVAL_IMAGE_MARK = '### 命中图片（可选）'
+const RETRIEVAL_IMAGE_RE = /^\s*-\s*!\[([^\]]*)\]\(([^)]+)\)/
+const RETRIEVAL_SOURCE_RE = /^\s*source:\s*(.+)$/
+
+function parseRetrievalResult(result: string): { hitText: string; images: RetrievalImage[] } {
+  const markIndex = result.indexOf(RETRIEVAL_IMAGE_MARK)
+  const textPart = markIndex >= 0 ? result.slice(0, markIndex) : result
+  const imagePart = markIndex >= 0 ? result.slice(markIndex + RETRIEVAL_IMAGE_MARK.length) : ''
+  const hitText = textPart.replace(/^###\s*命中文本\s*/, '').trim()
+    || result.trim()
+    || '（未命中）'
+
+  const images: RetrievalImage[] = []
+  const lines = imagePart.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const matched = lines[i].match(RETRIEVAL_IMAGE_RE)
+    if (!matched) continue
+    const sourceMatched = (lines[i + 1] || '').match(RETRIEVAL_SOURCE_RE)
+    images.push({
+      alt: matched[1] || '检索图片',
+      path: matched[2],
+      source: sourceMatched ? sourceMatched[1].trim() : '',
+    })
+  }
+  return { hitText, images }
+}
+
+function makeTask(type: string, result: string, query = ''): TaskInfo {
+  const task: TaskInfo = { type, result, query }
+  if (type === 'knowledge_retrieval') {
+    const parsed = parseRetrievalResult(result)
+    task.hitText = parsed.hitText
+    task.images = parsed.images
+  }
+  return task
+}
+
+// ==================== 思考过程步骤时间线 ====================
+// 与后端 _StepBuilder 同构：连续 reasoning token 合并、遇 content / task 断开。
+// 这样流式期间构造的 steps 与落库回放的 steps 完全一致，刷新后顺序不变。
+const THINK_MARKER_RE = /<THINK_V2>|<\/?think>/gi
+
+function appendReasoningStep(msg: UIMessage, text: string) {
+  // <THINK_V2> / <think> / </think> 是后端合成的控制帧，落库序列里不存在
+  const cleaned = text.replace(THINK_MARKER_RE, '')
+  if (!cleaned) return
+  const steps = msg.steps || (msg.steps = [])
+  const last = steps[steps.length - 1]
+  if (!msg._stepBreak && last && last.kind === 'reasoning') {
+    last.text = (last.text || '') + cleaned
+  } else {
+    steps.push({ kind: 'reasoning', text: cleaned, clean: cleaned })
+  }
+  msg._stepBreak = false
+}
+
+function breakReasoningStep(msg: UIMessage) {
+  msg._stepBreak = true
+}
+
+function appendTaskStep(msg: UIMessage, type: string, result: string, query: string) {
+  const steps = msg.steps || (msg.steps = [])
+  steps.push({ kind: 'task', task: makeTask(type, result, query) })
+  msg._stepBreak = true
+}
+
+/** 历史消息：新数据直接回放 steps；旧数据回退为「整段思维链 + 任务列表」 */
+function buildHistorySteps(m: ChatMessage): ThinkingStep[] {
+  if (m.steps && m.steps.length > 0) {
+    return m.steps.map<ThinkingStep>(s => s.kind === 'task'
+      ? { kind: 'task', task: makeTask(s.type || '', s.result || '', s.query) }
+      : { kind: 'reasoning', text: s.text || '', clean: cleanReasoning(s.text || '') })
+  }
+  const steps: ThinkingStep[] = []
+  if (m.reasoning_content) {
+    steps.push({
+      kind: 'reasoning',
+      text: m.reasoning_content,
+      clean: cleanReasoning(m.reasoning_content),
+    })
+  }
+  for (const t of m.tasks || []) {
+    steps.push({ kind: 'task', task: makeTask(t.type, t.result, t.query) })
+  }
+  return steps
 }
 
 function formatTime(ts: number): string {
@@ -190,7 +373,7 @@ function formatMessageTime(ts: number): string {
 
 function showTimeDivider(msg: UIMessage, i: number): boolean {
   if (i === 0) return true
-  const prev = messages.value[i - 1]
+  const prev = currentMessages.value[i - 1]
   if (!msg.created_at || !prev.created_at) return false
   return (msg.created_at - prev.created_at) > 300
 }
@@ -234,21 +417,24 @@ async function loadMoreSessions() {
 
 async function loadMessages(sessionId: string) {
   loadingMessages.value = true
+  const rt = ensureRuntime(sessionId)
   try {
     const res = await getSessionMessages(sessionId)
     const visible = res.messages.filter(isVisibleMessage)
-    messages.value = visible.map((m) => ({
+    rt.messages = visible.map((m) => ({
       id: m.id,
       role: m.role as 'user' | 'assistant',
       content: m.content,
+      attachments: m.attachments || [],
       reasoning: m.reasoning_content || '',
-      showThinking: !!(m.reasoning_content),
+      steps: buildHistorySteps(m),
+      showThinking: !!(m.reasoning_content || m.steps?.length || m.tasks?.length),
       isStreaming: false,
       created_at: m.created_at,
     }))
     hasMoreMessages.value = res.has_more
   } catch {
-    messages.value = []
+    rt.messages = []
   }
   loadingMessages.value = false
 }
@@ -263,33 +449,61 @@ async function loadFeedbackStatus(sessionId: string) {
 }
 
 // ==================== 对话操作 ====================
+function saveViewState(sid: string) {
+  const rt = runtimes[sid]
+  if (rt) rt.scrollTop = messageArea.value?.scrollTop || 0
+}
+
+function restoreViewState(sid: string) {
+  const rt = runtimes[sid]
+  if (rt && messageArea.value) messageArea.value.scrollTop = rt.scrollTop
+}
+
 async function handleSelectSession(sid: string) {
-  if (isStreaming.value) return
+  if (sid === currentSessionId.value) return
+  if (currentSessionId.value) saveViewState(currentSessionId.value)
+
   currentSessionId.value = sid
-  await loadMessages(sid)
+  // 切换到该对话即视为已读，清除未读标识
+  markRead(sid)
+  const rt = ensureRuntime(sid)
+  const wasInitialized = rt.initialized
+
+  // 生成中的会话使用本地缓存，跳过 loadMessages，避免数据库内容覆盖流式半成品
+  if (!rt.initialized) {
+    await loadMessages(sid)
+    rt.initialized = true
+  }
   await loadFeedbackStatus(sid)
+  _thinkingContentEl = null
   await nextTick()
-  scrollToBottom()
+  if (wasInitialized) restoreViewState(sid)
+  else scrollToBottom()
 }
 
 async function handleNewChat() {
-  if (isStreaming.value) return
-  const sid = await createSession()
-  if (sid) {
+  try {
+    const sid = await createSession()
+    if (!sid) return
+    ensureRuntime(sid)
     await loadSessions()
+    if (currentSessionId.value) saveViewState(currentSessionId.value)
     currentSessionId.value = sid
-    messages.value = []
+    runtimes[sid].messages = []
     await loadMessages(sid)
+    runtimes[sid].initialized = true
+    _thinkingContentEl = null
     hasFeedback.value = false
     await nextTick()
     scrollToBottom()
+  } catch {
+    ElMessage.warning('新建对话失败，请重试')
   }
 }
 
 // ==================== 发送消息 ====================
-async function sendMessage() {
-  const text = inputText.value.trim()
-  if (!text || isStreaming.value) return
+async function sendMessage(text: string, attachmentPayloads: AttachmentPayload[] = []) {
+  if (!text.trim() && !attachmentPayloads.length) return
 
   if (!currentSessionId.value) {
     await handleNewChat()
@@ -297,14 +511,29 @@ async function sendMessage() {
     await new Promise(r => setTimeout(r, 150))
   }
 
-  inputText.value = ''
+  const sid = currentSessionId.value
+  const rt = ensureRuntime(sid)
+  if (rt.generating) {
+    ElMessage.warning('当前对话正在生成中')
+    return
+  }
+
+  const userAttachments = attachmentPayloads.map((p) => ({
+    id: p.id || `att_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+    kind: p.kind,
+    name: p.name,
+    mime: p.mime,
+    size: p.size,
+    previewUrl: p.kind === 'image' ? p.data_url : undefined,
+  }))
 
   const userMsg: UIMessage = {
     role: 'user',
     content: text,
+    attachments: userAttachments,
     created_at: Date.now() / 1000,
   }
-  messages.value.push(userMsg)
+  rt.messages.push(userMsg)
   await nextTick()
   scrollToBottom()
 
@@ -312,149 +541,183 @@ async function sendMessage() {
     role: 'assistant',
     content: '',
     reasoning: '',
-    tasks: [],
+    steps: [],
     showThinking: true,
     isStreaming: true,
   })
-  messages.value.push(assistantMsg)
-
-  isStreaming.value = true
+  rt.messages.push(assistantMsg)
+  // 新消息会生成新的思考区 DOM，重置缓存的滚动目标
+  _thinkingContentEl = null
 
   if (DEBUG_STREAM) console.debug('[Vue] sendMessage start streaming:', text.substring(0, 50))
 
-  abortController = streamChat(
-    currentSessionId.value,
+  const controller = streamChat(
+    sid,
     text,
     (content) => {
+      if (!isActiveCallback(sid, controller)) return
       // 最终回答开始时自动收起思考过程
       if (!assistantMsg.content && content) {
         assistantMsg.showThinking = false
       }
       assistantMsg.content += content
+      breakReasoningStep(assistantMsg)
       scheduleRender(assistantMsg)
-      if (DEBUG_STREAM) {
-        const preview = content.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onContent +="${preview}" total=${assistantMsg.content.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
+      scheduleStreamScroll(sid)
     },
     (reasoning) => {
+      if (!isActiveCallback(sid, controller)) return
       assistantMsg.reasoning = (assistantMsg.reasoning || '') + reasoning
-      if (DEBUG_STREAM) {
-        const preview = reasoning.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onReasoning +="${preview}" total=${assistantMsg.reasoning!.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
-      scrollThinkingContentToBottom()
+      appendReasoningStep(assistantMsg, reasoning)
+      // 步骤文本清洗走节流渲染（各 step.clean 在 syncDerived 内更新）
+      scheduleRender(assistantMsg)
+      scheduleStreamScroll(sid)
     },
-    (type: string, result: string) => {
-      if (!assistantMsg.tasks) assistantMsg.tasks = []
-      assistantMsg.tasks.push({ type, result })
+    (type: string, result: string, query: string) => {
+      if (!isActiveCallback(sid, controller)) return
+      appendTaskStep(assistantMsg, type, result, query)
       if (DEBUG_STREAM) console.debug(`[Vue] onTask type="${type}" result="${result.substring(0, 40)}"`)
     },
     () => {
+      if (!isActiveCallback(sid, controller)) return
       assistantMsg.isStreaming = false
       // 流式结束，立即渲染最终内容
       scheduleRender(assistantMsg)
       if (DEBUG_STREAM) {
         console.debug(
-          `[Vue] onDone | reasoning=${assistantMsg.reasoning?.length || 0} content=${assistantMsg.content.length} tasks=${assistantMsg.tasks?.length || 0}`,
+          `[Vue] onDone | reasoning=${assistantMsg.reasoning?.length || 0} content=${assistantMsg.content.length} steps=${assistantMsg.steps?.length || 0}`,
         )
       }
       // showThinking 不再强制覆盖，保持自动收起的状态
-      isStreaming.value = false
-      abortController = null
+      finishGenerating(sid, { success: true })
+      // 生成完成时用户不在该会话 → 标记未读；正在查看则不标记
+      if (sid !== currentSessionId.value) markUnread(sid)
       loadSessions()
     },
     (_error) => {
+      if (!isActiveCallback(sid, controller)) return
       assistantMsg.isStreaming = false
       assistantMsg.showRegenerate = true
       assistantMsg.error = _error
       scheduleRender(assistantMsg)
-      isStreaming.value = false
-      abortController = null
+      finishGenerating(sid, { error: _error })
       if (DEBUG_STREAM) console.debug('[Vue] onError:', _error)
     },
+    attachmentPayloads,
+    (title) => {
+      // 迟到的事件或已停止/已删除的会话不处理
+      if (!isActiveCallback(sid, controller)) return
+      if (!title) return
+      // 用户正在编辑该会话标题（侧边栏内联 / 顶部内联）时不覆盖输入
+      if (editingSessionId.value === sid) return
+      if (editingTitleInTop.value && currentSessionId.value === sid) return
+      const target = (sessions.value || []).find(s => s.id === sid)
+      if (!target) return
+      // 本地更新；currentTitle 与侧边栏列表会自动重新渲染
+      target.title = title
+      if (DEBUG_STREAM) console.debug(`[Vue] onTitle: "${title}"`)
+    },
   )
-}
 
-function stopStreaming() {
-  if (abortController) {
-    abortController.abort()
-    abortController = null
-    isStreaming.value = false
-    const last = messages.value[messages.value.length - 1]
-    if (last && last.isStreaming) {
-      last.isStreaming = false
-    }
+  if (!markGenerating(sid, controller, assistantMsg)) {
+    controller.abort()
+    rt.messages.splice(-2, 2)
+    ElMessage.warning('当前对话正在生成中')
   }
 }
 
+function handleChatSend(payload: { text: string; attachments: AttachmentPayload[] }) {
+  sendMessage(payload.text, payload.attachments)
+}
+
+/** 停止指定会话的生成（默认当前会话），不影响其他会话的流 */
+function stopStreaming(sid = currentSessionId.value) {
+  const rt = runtimes[sid]
+  if (!rt?.controller) return
+  const msg = rt.streamingMessage
+  rt.controller.abort()
+  finishGenerating(sid, { stopped: true })
+  if (msg) msg.isStreaming = false
+}
+
 async function handleRegenerate(msg: UIMessage) {
+  const sid = currentSessionId.value
+  const rt = runtimes[sid]
+  if (!rt || rt.generating) {
+    ElMessage.warning('当前对话正在生成中')
+    return
+  }
+  const idx = rt.messages.indexOf(msg)
+  const userContent = idx > 0 ? rt.messages[idx - 1].content : ''
+
   msg.content = ''
   msg.reasoning = ''
   msg.showRegenerate = false
   msg.error = undefined
   msg.showThinking = true
   msg.isStreaming = true
-  msg.tasks = []
+  msg.steps = []
+  msg._stepBreak = true
 
-  isStreaming.value = true
+  _thinkingContentEl = null
 
-  abortController = streamChat(
-    currentSessionId.value,
-    messages.value[messages.value.length - 2].content,
+  const controller = streamChat(
+    sid,
+    userContent,
     (content) => {
+      if (!isActiveCallback(sid, controller)) return
       // 最终回答开始时自动收起思考过程
       if (!msg.content && content) {
         msg.showThinking = false
       }
       msg.content += content
+      breakReasoningStep(msg)
       scheduleRender(msg)
-      if (DEBUG_STREAM) {
-        const preview = content.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onContent(regenerate) +="${preview}" total=${msg.content.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
+      scheduleStreamScroll(sid)
     },
     (reasoning) => {
+      if (!isActiveCallback(sid, controller)) return
       msg.reasoning = (msg.reasoning || '') + reasoning
-      if (DEBUG_STREAM) {
-        const preview = reasoning.substring(0, 40).replace(/\n/g, '\\n')
-        console.debug(`[Vue] onReasoning(regenerate) +="${preview}" total=${msg.reasoning!.length}`)
-      }
-      if (userAtBottom.value) scrollToBottom()
-      scrollThinkingContentToBottom()
+      appendReasoningStep(msg, reasoning)
+      scheduleRender(msg)
+      scheduleStreamScroll(sid)
     },
-    (type: string, result: string) => {
-      if (!msg.tasks) msg.tasks = []
-      msg.tasks.push({ type, result })
+    (type: string, result: string, query: string) => {
+      if (!isActiveCallback(sid, controller)) return
+      appendTaskStep(msg, type, result, query)
       if (DEBUG_STREAM) console.debug(`[Vue] onTask(regenerate) type="${type}"`)
     },
     () => {
+      if (!isActiveCallback(sid, controller)) return
       msg.isStreaming = false
       // 流式结束，立即渲染最终内容
       scheduleRender(msg)
       if (DEBUG_STREAM) {
         console.debug(
-          `[Vue] onDone(regenerate) | reasoning=${msg.reasoning?.length || 0} content=${msg.content.length} tasks=${msg.tasks?.length || 0}`,
+          `[Vue] onDone(regenerate) | reasoning=${msg.reasoning?.length || 0} content=${msg.content.length} steps=${msg.steps?.length || 0}`,
         )
       }
       // showThinking 不再强制覆盖，保持自动收起的状态
-      isStreaming.value = false
-      abortController = null
+      finishGenerating(sid, { success: true })
+      // 生成完成时用户不在该会话 → 标记未读；正在查看则不标记
+      if (sid !== currentSessionId.value) markUnread(sid)
       loadSessions()
     },
     (_error) => {
+      if (!isActiveCallback(sid, controller)) return
       msg.isStreaming = false
       msg.showRegenerate = true
       msg.error = _error
       scheduleRender(msg)
-      isStreaming.value = false
-      abortController = null
+      finishGenerating(sid, { error: _error })
       if (DEBUG_STREAM) console.debug('[Vue] onError(regenerate):', _error)
     },
   )
+
+  if (!markGenerating(sid, controller, msg)) {
+    controller.abort()
+    ElMessage.warning('当前对话正在生成中')
+  }
 }
 
 // ==================== 删除对话 ====================
@@ -470,6 +733,8 @@ async function handleDeleteSession(s: Session) {
         type: 'warning',
       },
     )
+    // 先中断该会话的流并清理运行时，避免迟到的回调写回已删除会话
+    disposeRuntime(s.id)
     await apiDeleteSession(s.id)
 
     const isCurrent = s.id === currentSessionId.value
@@ -477,7 +742,6 @@ async function handleDeleteSession(s: Session) {
 
     if (isCurrent) {
       currentSessionId.value = ''
-      messages.value = []
       const slist = sessions.value || []
       if (slist.length > 0) {
         await handleSelectSession(slist[0].id)
@@ -560,7 +824,29 @@ function openImagePreview(src: string) {
   previewImage.value = src
 }
 
+async function previewAttachment(msg: UIMessage, att: ChatAttachment & { previewUrl?: string }) {
+  if (!msg.id) return
+  try {
+    const blob = await getAttachmentContent(msg.id, att.id)
+    const url = URL.createObjectURL(blob)
+    if (att.kind === 'pdf') {
+      window.open(url, '_blank', 'noopener')
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      return
+    }
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl)
+    previewBlobUrl = url
+    previewImage.value = previewBlobUrl
+  } catch (err) {
+    ElMessage.warning(err instanceof Error ? err.message : '附件预览失败')
+  }
+}
+
 function closeImagePreview() {
+  if (previewBlobUrl) {
+    URL.revokeObjectURL(previewBlobUrl)
+    previewBlobUrl = null
+  }
   previewImage.value = null
 }
 
@@ -596,20 +882,6 @@ async function handleLogout() {
   }
 }
 
-// ==================== 输入框处理 ====================
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey && !isComposing.value) {
-    e.preventDefault()
-    sendMessage()
-  }
-}
-
-function autoResizeInput(e: Event) {
-  const el = e.target as HTMLTextAreaElement
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 150) + 'px'
-}
-
 // ==================== 滚动处理 ====================
 async function scrollToBottom() {
   await nextTick()
@@ -618,14 +890,37 @@ async function scrollToBottom() {
   }
 }
 
-/** 将当前流式消息的思考过程内容区滚动到底部 */
-function scrollThinkingContentToBottom() {
-  nextTick(() => {
-    // 找到最后一个 assistant 消息中的 .thinking-content（即当前正在流式的消息）
-    const contents = messageArea.value?.querySelectorAll('.thinking-content')
-    if (contents && contents.length > 0) {
-      const el = contents[contents.length - 1] as HTMLElement
-      el.scrollTop = el.scrollHeight
+/**
+ * 流式期间的高频滚动节流。
+ *
+ * 原先每个 token 都会执行一次「读 scrollHeight + 写 scrollTop」，属于强制同步布局
+ * （layout thrashing），并且每次都 querySelectorAll 遍历 DOM 找 .thinking-steps，
+ * 开销随会话长度（消息数、图片数）增长——这是「聊得越久越卡」的主因。
+ * 现在统一收敛为每帧最多一次，并缓存思考区元素，避免重复查询。
+ */
+let _streamScrollScheduled = false
+let _thinkingContentEl: HTMLElement | null = null
+
+function scheduleStreamScroll(sid = currentSessionId.value) {
+  // 后台会话产生的 token 不得滚动当前视图
+  if (sid !== currentSessionId.value) return
+  if (_streamScrollScheduled) return
+  _streamScrollScheduled = true
+  requestAnimationFrame(() => {
+    _streamScrollScheduled = false
+
+    // 1) 消息区跟随底部
+    if (userAtBottom.value && messageArea.value) {
+      messageArea.value.scrollTop = messageArea.value.scrollHeight
+    }
+
+    // 2) 思考过程内容区跟随底部（缓存元素；消息重建后自动重新查询）
+    if (!_thinkingContentEl || !_thinkingContentEl.isConnected) {
+      const list = messageArea.value?.querySelectorAll('.thinking-steps')
+      _thinkingContentEl = list && list.length > 0 ? (list[list.length - 1] as HTMLElement) : null
+    }
+    if (_thinkingContentEl) {
+      _thinkingContentEl.scrollTop = _thinkingContentEl.scrollHeight
     }
   })
 }
@@ -650,7 +945,7 @@ function handleSidebarScroll() {
 }
 
 watch(
-  () => messages.value.length,
+  () => currentMessages.value.length,
   () => {
     if (userAtBottom.value) {
       scrollToBottom()
@@ -670,7 +965,7 @@ watch(previewImage, (val) => {
 
 async function loadMoreMessages() {
   if (loadingMessages.value || !hasMoreMessages.value) return
-  const firstMsg = messages.value[0]
+  const firstMsg = currentMessages.value[0]
   if (!firstMsg?.id) return
 
   loadingMessages.value = true
@@ -683,13 +978,17 @@ async function loadMoreMessages() {
       id: m.id,
       role: m.role as 'user' | 'assistant',
       content: m.content,
+      attachments: m.attachments || [],
       reasoning: m.reasoning_content || '',
-      showThinking: !!(m.reasoning_content),
+      steps: buildHistorySteps(m),
+      showThinking: !!(m.reasoning_content || m.steps?.length || m.tasks?.length),
       isStreaming: false,
       created_at: m.created_at,
     }))
 
-    messages.value = [...olderMsgs, ...messages.value]
+    if (currentRuntime.value) {
+      currentRuntime.value.messages = [...olderMsgs, ...currentRuntime.value.messages]
+    }
     hasMoreMessages.value = res.has_more
 
     await nextTick()
@@ -712,6 +1011,7 @@ onMounted(async () => {
   } else {
     currentSessionId.value = list[0].id
     await loadMessages(list[0].id)
+    runtimes[list[0].id].initialized = true
     await loadFeedbackStatus(list[0].id)
     await nextTick()
     scrollToBottom()
@@ -719,7 +1019,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  stopStreaming()
+  disposeAllRuntimes()
   document.removeEventListener('mousemove', onResizerMouseMove)
   document.removeEventListener('mouseup', onResizerMouseUp)
 })
@@ -733,7 +1033,7 @@ onBeforeUnmount(() => {
 
       <!-- 新对话按钮 -->
       <div class="sidebar-new-chat">
-        <button class="btn-new-chat" @click="handleNewChat" :disabled="isStreaming">
+        <button class="btn-new-chat" @click="handleNewChat">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M8 3v10M3 8h10"/>
           </svg>
@@ -762,7 +1062,7 @@ onBeforeUnmount(() => {
           v-for="s in filteredSessions"
           :key="s.id"
           class="chat-item"
-          :class="{ active: s.id === currentSessionId }"
+          :class="{ active: s.id === currentSessionId, unread: runtimes[s.id]?.unread }"
           @click="handleSelectSession(s.id)"
         >
           <div class="chat-item-icon">
@@ -785,7 +1085,22 @@ onBeforeUnmount(() => {
 
           <!-- 正常模式 -->
           <div v-else class="chat-item-info">
-            <div class="chat-item-title">{{ s.title || '新对话' }}</div>
+            <div class="chat-item-title">
+              <span class="chat-item-title-text">{{ s.title || '新对话' }}</span>
+              <span
+                v-if="isSessionGenerating(s.id)"
+                class="gen-badge"
+                title="该对话正在生成中"
+                aria-label="该对话正在生成中"
+              ><i class="gen-badge__dot"></i>正在生成</span>
+              <span v-else-if="runtimes[s.id]?.error" class="gen-badge gen-badge--error">生成失败</span>
+              <span
+                v-else-if="runtimes[s.id]?.unread"
+                class="unread-dot"
+                title="有新回复"
+                aria-label="有新回复未读"
+              ></span>
+            </div>
             <div v-if="s.last_message" class="chat-item-preview">{{ truncatePreview(s.last_message) }}</div>
           </div>
 
@@ -830,6 +1145,12 @@ onBeforeUnmount(() => {
             @keydown.escape="cancelEditTitle"
             @blur="commitEditTitle"
           />
+          <span
+            v-if="isCurrentStreaming"
+            class="gen-badge gen-badge--title"
+            title="该对话正在生成中"
+            aria-label="该对话正在生成中"
+          ><i class="gen-badge__dot"></i>正在生成</span>
           <button
             class="btn-feedback-top"
             :class="{ active: hasFeedback }"
@@ -862,7 +1183,7 @@ onBeforeUnmount(() => {
       <div class="message-area" ref="messageArea" @scroll="handleMessageScroll">
         <div v-if="loadingMessages" class="loading-hint">加载中...</div>
 
-        <template v-for="(msg, i) in messages" :key="msg.id || i">
+        <template v-for="(msg, i) in currentMessages" :key="msg.id || i">
           <!-- 时间分隔线 -->
           <div v-if="showTimeDivider(msg, i)" class="msg-time-divider">
             {{ msg.created_at ? formatTime(msg.created_at) : '' }}
@@ -891,9 +1212,24 @@ onBeforeUnmount(() => {
 
               <!-- 气泡 -->
               <div class="msg-bubble">
+                <!-- 用户附件卡片（只读） -->
+                <div
+                  v-if="msg.role === 'user' && msg.attachments && msg.attachments.length"
+                  class="msg-attachments"
+                >
+                  <div
+                    v-for="att in msg.attachments"
+                    :key="att.id"
+                    class="msg-attachment-wrapper"
+                    @click="previewAttachment(msg, att)"
+                  >
+                    <AttachmentCard :attachment="att" clickable />
+                  </div>
+                </div>
+
                 <!-- 思考过程 -->
                 <div
-                  v-if="msg.role === 'assistant' && (msg.reasoning || msg.isStreaming || (msg.tasks && msg.tasks.length > 0))"
+                  v-if="msg.role === 'assistant' && (msg.reasoning || msg.isStreaming || (msg.steps && msg.steps.length > 0))"
                   class="thinking-block"
                   :class="{ collapsed: !msg.showThinking }"
                 >
@@ -917,18 +1253,39 @@ onBeforeUnmount(() => {
                       </svg>
                     </span>
                   </div>
-                  <div class="thinking-content">
-                    <!-- Skill 任务执行结果 -->
-                    <template v-if="msg.tasks && msg.tasks.length > 0">
-                      <div v-for="(t, ti) in msg.tasks" :key="ti" class="task-item">
-                        <span class="task-badge">{{ t.type }}</span>
-                        <span class="task-result">{{ t.result }}</span>
+                  <!-- 时间线：reasoning 片段与 Skill 结果按到达顺序交错，刷新后由落库 steps 原样回放 -->
+                  <div class="thinking-steps">
+                    <template v-for="(s, si) in msg.steps || []" :key="si">
+                      <div v-if="s.kind === 'reasoning'" class="reasoning-text">{{ s.clean ?? cleanReasoning(s.text || '') }}</div>
+                      <div v-else-if="s.task?.type === 'knowledge_retrieval'" class="retrieval-card">
+                        <div class="retrieval-header">
+                          <svg class="retrieval-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/>
+                          </svg>
+                          <span class="retrieval-title">知识库检索结果</span>
+                          <span v-if="s.task?.query" class="retrieval-query" :title="s.task?.query">{{ s.task?.query }}</span>
+                        </div>
+                        <div class="retrieval-text">{{ s.task?.hitText || s.task?.result }}</div>
+                        <div v-if="s.task?.images && s.task.images.length > 0" class="retrieval-images">
+                          <div
+                            v-for="(img, ii) in s.task?.images || []"
+                            :key="ii"
+                            class="retrieval-image"
+                            :title="img.source || img.alt"
+                            @click="openImagePreview(img.path)"
+                          >
+                            <img :src="img.path" :alt="img.alt" />
+                            <span class="retrieval-image-alt">{{ img.alt }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else-if="s.task" class="task-item">
+                        <span class="task-badge">{{ s.task?.type }}</span>
+                        <span class="task-result">{{ s.task?.result }}</span>
                       </div>
                     </template>
-                    <!-- 大模型思考推理过程 -->
-                    <div v-if="msg.reasoning" class="reasoning-text">{{ cleanReasoning(msg.reasoning) }}</div>
                     <!-- 占位：等待思考内容 -->
-                    <div v-if="msg.isStreaming && !msg.reasoning && (!msg.tasks || msg.tasks.length === 0)" class="thinking-placeholder">
+                    <div v-if="msg.isStreaming && (!msg.steps || msg.steps.length === 0)" class="thinking-placeholder">
                       正在分析...
                     </div>
                   </div>
@@ -936,7 +1293,7 @@ onBeforeUnmount(() => {
 
                 <!-- 分隔线 -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.reasoning && msg.content"
+                  v-if="msg.role === 'assistant' && (msg.reasoning || (msg.steps && msg.steps.length > 0)) && msg.content"
                   class="thinking-divider"
                 ></div>
 
@@ -976,36 +1333,13 @@ onBeforeUnmount(() => {
 
       <!-- 底部区域 -->
       <div class="bottom-area">
-        <!-- 输入区域 -->
-        <div class="input-row">
-          <div class="input-wrapper-bottom">
-            <textarea
-              v-model="inputText"
-              class="msg-input"
-              placeholder="输入您的问题... (Enter 发送, Shift+Enter 换行)"
-              rows="1"
-              :disabled="isStreaming"
-              @keydown="handleKeydown"
-              @compositionstart="isComposing = true"
-              @compositionend="isComposing = false"
-              @input="autoResizeInput"
-            ></textarea>
-            <button
-              class="btn-send"
-              :class="{ stop: isStreaming }"
-              :disabled="!isStreaming && !inputText.trim()"
-              @click="isStreaming ? stopStreaming() : sendMessage()"
-              :title="isStreaming ? '停止生成' : '发送'"
-            >
-              <svg v-if="!isStreaming" viewBox="0 0 18 18" fill="currentColor">
-                <path d="M1.5 2.5l15 6.5-15 6.5 3-6.5-3-6.5z"/>
-              </svg>
-              <svg v-else viewBox="0 0 16 16" fill="currentColor">
-                <rect x="3" y="3" width="10" height="10" rx="1"/>
-              </svg>
-            </button>
-          </div>
-        </div>
+        <ChatInput
+          :key="currentSessionId"
+          :streaming="isCurrentStreaming"
+          v-model="currentDraft"
+          @send="handleChatSend"
+          @stop="stopStreaming"
+        />
       </div>
     </div>
 
@@ -1095,7 +1429,6 @@ onBeforeUnmount(() => {
 }
 .btn-new-chat:hover { background: var(--color-primary-hover); }
 .btn-new-chat:active { background: var(--color-primary-active); transform: scale(0.98); }
-.btn-new-chat:disabled { background: var(--color-text-disabled); cursor: not-allowed; transform: none; }
 .btn-new-chat svg { width: 16px; height: 16px; }
 
 .sidebar-search {
@@ -1183,12 +1516,67 @@ onBeforeUnmount(() => {
 }
 
 .chat-item-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
   font-size: 14px;
   font-weight: 500;
   color: var(--color-text-primary);
+}
+.chat-item-title-text {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ==================== 会话生成状态徽标 ==================== */
+.gen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+  padding: 2px var(--spacing-sm);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  border-radius: var(--radius-round);
+}
+.gen-badge--title {
+  font-size: 12px;
+  margin-left: var(--spacing-sm);
+  vertical-align: middle;
+}
+.gen-badge--error {
+  color: var(--color-danger);
+  background: transparent;
+}
+.gen-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-round);
+  background: currentColor;
+  animation: gen-pulse 1.2s ease-in-out infinite;
+}
+@keyframes gen-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+
+/* ==================== 未读状态 ==================== */
+.chat-item.unread .chat-item-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: var(--radius-round);
+  background: var(--color-primary);
 }
 
 .chat-item-preview {
@@ -1556,27 +1944,30 @@ onBeforeUnmount(() => {
   0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
   30% { opacity: 1; transform: scale(1); }
 }
-.thinking-content {
+/* 思考过程时间线：reasoning 片段与任务卡片按序排列，统一滚动 */
+.thinking-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 12px;
   font-size: 12px;
   color: var(--color-text-tertiary);
   line-height: 20px;
-  max-height: 100px;
+  max-height: 300px;
   overflow-y: auto;
   border-top: 1px solid var(--color-border-light);
 }
-.thinking-block.collapsed .thinking-content {
+.thinking-block.collapsed .thinking-steps {
   display: none;
 }
-.thinking-content::-webkit-scrollbar { width: 3px; }
-.thinking-content::-webkit-scrollbar-thumb {
+.thinking-steps::-webkit-scrollbar { width: 3px; }
+.thinking-steps::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 2px;
 }
 
 /* 任务执行项 */
 .task-item {
-  margin-bottom: 8px;
   padding: 6px 8px;
   background: #F0F4FF;
   border-radius: var(--radius-sm);
@@ -1593,8 +1984,18 @@ onBeforeUnmount(() => {
   margin-right: 6px;
 }
 .task-result {
+  display: block;
+  margin-top: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
   color: var(--color-text-secondary);
   word-break: break-word;
+}
+.task-result::-webkit-scrollbar { width: 3px; }
+.task-result::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
 }
 
 /* 思考推理文本 */
@@ -1607,6 +2008,87 @@ onBeforeUnmount(() => {
 .thinking-placeholder {
   color: var(--color-text-disabled);
   font-style: italic;
+}
+
+/* knowledge_retrieval 结果卡片（时间线中的一个步骤） */
+.retrieval-card {
+  border: 1px solid #E0E8FF;
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: #F7F9FF;
+  padding: 8px 10px;
+}
+.retrieval-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+.retrieval-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--color-primary);
+}
+.retrieval-title {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+.retrieval-query {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: #E0E8FF;
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.retrieval-text {
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 19px;
+  color: var(--color-text-secondary);
+}
+.retrieval-text::-webkit-scrollbar { width: 3px; }
+.retrieval-text::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+.retrieval-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.retrieval-image {
+  width: 96px;
+  cursor: zoom-in;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.retrieval-image img {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.retrieval-image-alt {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thinking-divider {
@@ -1710,6 +2192,17 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--color-border-light);
   padding: 16px 24px;
   flex-shrink: 0;
+}
+
+.msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.msg-attachment-wrapper {
+  display: inline-flex;
 }
 
 /* 顶部反馈按钮 */

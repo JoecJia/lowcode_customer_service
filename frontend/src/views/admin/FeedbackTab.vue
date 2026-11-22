@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getFeedbacks, getFeedbackDetail, resolveFeedback } from '../../api/admin'
+import { getFeedbacks, getFeedbackDetail, resolveFeedback, markFeedbackNoNeed } from '../../api/admin'
+import { renderMarkdown } from '../../components/messageUtils'
 
 interface FeedbackItem {
   id: number
@@ -21,6 +22,7 @@ interface Message {
   content: string
   reasoning_content: string
   created_at: number
+  _renderedHtml?: string
 }
 
 interface QAPair {
@@ -123,7 +125,10 @@ async function selectFeedback(fb: FeedbackItem) {
     const data = await resp.json()
     if (data.ok) {
       feedbackDetail.value = data.data.feedback
-      messages.value = data.data.messages
+      messages.value = (data.data.messages as Message[]).map((m) => ({
+        ...m,
+        _renderedHtml: renderMarkdown(m.content),
+      }))
 
       // 自动为每条用户消息生成 Q&A 条目
       const userMessages = data.data.messages.filter((m: Message) => m.role === 'user')
@@ -180,6 +185,42 @@ async function handleResolve() {
   }
 }
 
+async function handleNoNeed() {
+  if (!selectedFeedbackId.value || resolving.value) return
+  resolving.value = true
+
+  try {
+    const resp = await markFeedbackNoNeed(selectedFeedbackId.value)
+    const data = await resp.json()
+    if (data.ok) {
+      ElMessage.success(data.message || '已标记为无需处理')
+      qaPairs.value = [{ question: '', answer: '' }]
+      selectedFeedbackId.value = null
+      messages.value = []
+      loadFeedbacks(true)
+    } else {
+      ElMessage.error(data.detail || '标记失败')
+    }
+  } catch {
+    ElMessage.error('标记失败')
+  } finally {
+    resolving.value = false
+  }
+}
+
+function statusLabel(status: string): string {
+  if (status === 'pending') return '待处理'
+  if (status === 'no_need') return '无需处理'
+  if (status === 'resolved') return '已处理'
+  return status
+}
+
+function statusTagType(status: string): 'warning' | 'success' | 'info' {
+  if (status === 'pending') return 'warning'
+  if (status === 'no_need') return 'success'
+  return 'info'
+}
+
 async function copyMessage(content: string) {
   try {
     await navigator.clipboard.writeText(content)
@@ -227,6 +268,7 @@ function onMouseUp() {
           <el-option label="全部" value="all" />
           <el-option label="待处理" value="pending" />
           <el-option label="已处理" value="resolved" />
+          <el-option label="无需处理" value="no_need" />
         </el-select>
       </div>
 
@@ -252,11 +294,8 @@ function onMouseUp() {
             >
               <div class="feedback-item-header">
                 <span class="feedback-user">{{ fb.username }}</span>
-                <el-tag
-                  :type="fb.status === 'pending' ? 'warning' : 'info'"
-                  size="small"
-                >
-                  {{ fb.status === 'pending' ? '待处理' : '已处理' }}
+                <el-tag :type="statusTagType(fb.status)" size="small">
+                  {{ statusLabel(fb.status) }}
                 </el-tag>
               </div>
               <div class="feedback-item-subject">{{ fb.session_title || '无标题' }}</div>
@@ -280,8 +319,8 @@ function onMouseUp() {
       <div class="feedback-conversation" :style="{ flex: `1 1 calc(100% - ${resizerWidth}px - 6px)` }">
         <div class="conversation-header" v-if="feedbackDetail">
           <span>{{ feedbackDetail.username }} 的对话</span>
-          <el-tag :type="feedbackDetail.status === 'pending' ? 'warning' : 'info'" size="small">
-            {{ feedbackDetail.status === 'pending' ? '待处理' : '已处理' }}
+          <el-tag :type="statusTagType(feedbackDetail.status)" size="small">
+            {{ statusLabel(feedbackDetail.status) }}
           </el-tag>
         </div>
         <div class="conversation-messages" v-loading="loadingDetail">
@@ -301,9 +340,8 @@ function onMouseUp() {
                   'chat-bubble--user': msg.role === 'user',
                   'chat-bubble--ai': msg.role !== 'user',
                 }"
-              >
-                {{ msg.content }}
-              </div>
+                v-html="msg._renderedHtml ?? ''"
+              ></div>
               <button
                 class="chat-msg-copy-btn"
                 @click="copyMessage(msg.content)"
@@ -321,7 +359,45 @@ function onMouseUp() {
 
       <!-- 改写区 -->
       <div class="feedback-rewrite-col" :style="{ width: resizerWidth + 'px', minWidth: '240px' }">
-        <div class="rewrite-header">改写回答</div>
+        <div class="rewrite-header">
+          <span class="rewrite-header-title">改写回答</span>
+          <div class="rewrite-header-actions">
+            <el-tooltip content="添加 Q&A" placement="bottom-end">
+              <span class="rewrite-icon-btn-wrap">
+                <button class="rewrite-icon-btn" @click="addQAPair">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v8M8 12h8" />
+                  </svg>
+                </button>
+              </span>
+            </el-tooltip>
+            <el-tooltip content="完成处理" placement="bottom-end">
+              <span class="rewrite-icon-btn-wrap">
+                <button
+                  class="rewrite-icon-btn rewrite-icon-btn--primary"
+                  :disabled="!qaPairs.some(q => q.answer.trim()) || resolving"
+                  @click="handleResolve"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="m8 12 3 3 5-6" />
+                  </svg>
+                </button>
+              </span>
+            </el-tooltip>
+            <el-tooltip content="无需处理" placement="bottom-end">
+              <span class="rewrite-icon-btn-wrap">
+                <button class="rewrite-icon-btn" :disabled="resolving" @click="handleNoNeed">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            </el-tooltip>
+          </div>
+        </div>
         <div class="rewrite-body">
           <div v-for="(qa, idx) in qaPairs" :key="idx" class="qa-pair-item">
             <div class="qa-pair-header">
@@ -349,20 +425,6 @@ function onMouseUp() {
               class="qa-input"
             />
           </div>
-
-          <el-button class="qa-add-btn" @click="addQAPair">
-            ＋ 添加 Q&A
-          </el-button>
-
-          <el-button
-            type="primary"
-            class="qa-resolve-btn"
-            :loading="resolving"
-            :disabled="!qaPairs.some(q => q.answer.trim())"
-            @click="handleResolve"
-          >
-            完成处理
-          </el-button>
         </div>
       </div>
     </div>
@@ -581,6 +643,69 @@ function onMouseUp() {
   border-top-right-radius: 4px;
 }
 
+/* Markdown 渲染内容（仅在对话气泡内生效） */
+.chat-bubble :deep(h1),
+.chat-bubble :deep(h2),
+.chat-bubble :deep(h3) { font-weight: 600; margin: 6px 0 4px; }
+.chat-bubble :deep(h1) { font-size: 17px; }
+.chat-bubble :deep(h2) { font-size: 15px; }
+.chat-bubble :deep(h3) { font-size: 14px; }
+.chat-bubble :deep(p) { margin: 4px 0; }
+.chat-bubble :deep(p:first-child) { margin-top: 0; }
+.chat-bubble :deep(p:last-child) { margin-bottom: 0; }
+.chat-bubble :deep(ul),
+.chat-bubble :deep(ol) { padding-left: 18px; margin: 4px 0; }
+.chat-bubble :deep(li) { margin: 2px 0; }
+.chat-bubble :deep(code) {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.chat-bubble :deep(pre) {
+  background: var(--color-bg-page);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.chat-bubble :deep(pre code) { background: none; padding: 0; }
+.chat-bubble :deep(blockquote) {
+  border-left: 3px solid var(--color-border);
+  padding-left: 8px;
+  margin: 6px 0;
+  color: var(--color-text-secondary);
+}
+.chat-bubble :deep(a) { color: var(--color-primary); }
+.chat-bubble :deep(table) { border-collapse: collapse; width: 100%; margin: 6px 0; }
+.chat-bubble :deep(th),
+.chat-bubble :deep(td) {
+  border: 1px solid var(--color-border);
+  padding: 4px 6px;
+  text-align: left;
+}
+.chat-bubble :deep(th) { background: var(--color-bg-page); font-weight: 600; }
+.chat-bubble :deep(img) { max-width: 100%; height: auto; }
+
+/* 用户气泡为蓝底白字，覆盖为浅色前景以保证可读 */
+.chat-bubble--user :deep(a) { color: var(--color-bg-card); text-decoration: underline; }
+.chat-bubble--user :deep(code),
+.chat-bubble--user :deep(pre),
+.chat-bubble--user :deep(th) {
+  background: color-mix(in srgb, var(--color-bg-card) 18%, transparent);
+  color: var(--color-bg-card);
+}
+.chat-bubble--user :deep(pre code) { background: none; }
+.chat-bubble--user :deep(blockquote) {
+  border-left-color: color-mix(in srgb, var(--color-bg-card) 60%, transparent);
+  color: var(--color-bg-card);
+}
+.chat-bubble--user :deep(th),
+.chat-bubble--user :deep(td) {
+  border-color: color-mix(in srgb, var(--color-bg-card) 40%, transparent);
+}
+
 .chat-msg-copy-btn {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -618,11 +743,65 @@ function onMouseUp() {
 }
 
 .rewrite-header {
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 6px 16px;
   font-size: 14px;
   font-weight: 500;
   border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
+}
+
+.rewrite-header-title {
+  white-space: nowrap;
+}
+
+.rewrite-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.rewrite-icon-btn-wrap {
+  display: inline-flex;
+}
+
+.rewrite-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.rewrite-icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.rewrite-icon-btn:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.rewrite-icon-btn--primary {
+  color: var(--color-primary);
+}
+
+.rewrite-icon-btn:disabled {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .rewrite-body {
@@ -668,23 +847,4 @@ function onMouseUp() {
   margin-bottom: 6px;
 }
 
-.qa-add-btn {
-  width: auto;
-  display: block;
-  margin: 0 auto 8px;
-  border: 1px dashed var(--color-border);
-  color: var(--color-primary);
-  background: transparent;
-}
-
-.qa-add-btn:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light);
-}
-
-.qa-resolve-btn {
-  width: auto;
-  display: block;
-  margin: 0 auto;
-}
 </style>

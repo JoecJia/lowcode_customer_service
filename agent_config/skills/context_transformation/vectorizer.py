@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import sys
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -15,6 +17,15 @@ META_PATH = os.path.join(FAISS_DIR, "chunk_meta.json")
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-zh-v1.5"
 CHUNK_MAX_CHARS = 500
 CHUNK_OVERLAP_CHARS = 50
+
+
+def to_rel_path(file_path: str) -> str:
+    """转成相对仓库根目录的相对路径，并统一用 `/` 分隔。
+
+    索引里只允许存相对路径：绝对路径会随机器/仓库位置失效，
+    而 Windows 的 `\\` 分隔符在迁移到 Linux 后也会与检索侧的比较逻辑不一致。
+    """
+    return os.path.relpath(file_path, REPO_DIR).replace(os.sep, "/")
 
 
 @dataclass
@@ -37,12 +48,14 @@ def iter_md_files(base_dir: str) -> list[str]:
         os.path.join(base_dir, "agent_config", "skills"),
     ]
     md_files: list[str] = []
+    skip_dirs = {".faiss", ".staging", ".backup"}
     for root in roots:
         if not os.path.isdir(root):
             continue
-        for dirpath, _, filenames in os.walk(root):
-            if ".faiss" in dirpath:
-                continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            # 剪枝：连遍历都不进入暂存区/备份区/索引目录，
+            # 否则全量重建会把未确认草稿与历史备份写入索引（见开发文档 §11.9）
+            dirnames[:] = [d for d in dirnames if d not in skip_dirs]
             for fn in filenames:
                 if fn.lower().endswith(".md"):
                     md_files.append(os.path.join(dirpath, fn))
@@ -52,7 +65,7 @@ def iter_md_files(base_dir: str) -> list[str]:
 class MarkdownChunker:
     def chunk_file(self, file_path: str) -> list[Chunk]:
         text = read_text_file(file_path)
-        rel_path = os.path.relpath(file_path, REPO_DIR)
+        rel_path = to_rel_path(file_path)
 
         sections = self._split_by_headers(text)
         chunks: list[Chunk] = []
@@ -162,13 +175,57 @@ class EmbeddingModel:
         _os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         _os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
         from sentence_transformers import SentenceTransformer
+        self._model_name = model_name
         self._model = SentenceTransformer(model_name, local_files_only=True)
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def dim(self) -> int:
+        # sentence-transformers 新版本把 get_sentence_embedding_dimension 改名为 get_embedding_dimension
+        getter = getattr(self._model, "get_embedding_dimension", None)
+        if getter is None:
+            getter = self._model.get_sentence_embedding_dimension
+        return int(getter())
 
     def encode(self, texts: list[str], is_query: bool = False) -> np.ndarray:
         if is_query:
             texts = [f"为这个句子生成表示以用于检索相关文章：{t}" for t in texts]
         embeddings = self._model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
         return np.asarray(embeddings, dtype=np.float32)
+
+
+def check_index_compatibility(
+    meta: dict,
+    embedder: "EmbeddingModel",
+    index_dim: Optional[int] = None,
+) -> tuple[bool, str]:
+    """校验 FAISS 索引（含 chunk_meta 中的模型信息）与当前 embedding 模型是否同源。
+
+    返回 ``(是否兼容, 说明)``。不兼容意味着索引向量与 query 向量不在同一空间，
+    搜索不会报错但结果不可信（同维度不同模型时尤其隐蔽），调用方应禁用向量通道
+    或拒绝增量写入，并提示全量 rebuild。
+    """
+    model_dim = embedder.dim
+
+    if index_dim and model_dim != index_dim:
+        return False, f"向量维度不一致：索引 {index_dim} 维，模型 {embedder.model_name} 输出 {model_dim} 维"
+
+    meta_model = meta.get("embedding_model")
+    meta_dim = meta.get("embedding_dim")
+
+    if meta_model and meta_model != embedder.model_name:
+        return False, f"索引由 {meta_model} 构建，与当前模型 {embedder.model_name} 不一致"
+
+    if meta_dim and int(meta_dim) != model_dim:
+        return False, f"索引元数据记录 {meta_dim} 维，模型输出 {model_dim} 维"
+
+    if not meta_model or not meta_dim:
+        return True, "索引元数据未记录模型信息（旧版索引），已跳过模型一致性校验；建议执行 rebuild 补齐"
+
+    return True, "索引与模型一致"
 
 
 class FAISSIndexManager:
@@ -183,6 +240,11 @@ class FAISSIndexManager:
     @property
     def ntotal(self) -> int:
         return self._index.ntotal if self._index else 0
+
+    @property
+    def dim(self) -> Optional[int]:
+        """索引实际维度；未加载/未构建时返回 None。"""
+        return int(self._index.d) if self._index is not None else self._dim
 
     def build(self, vectors: np.ndarray) -> None:
         import faiss
@@ -294,16 +356,21 @@ def build_index_from_docs(
         file_ids = []
         for chunk in chunks:
             chunk.chunk_id = chunk_id_counter
-            chunk.source_file = os.path.relpath(fpath, REPO_DIR)
+            chunk.source_file = to_rel_path(fpath)
             all_chunks.append(chunk)
             file_ids.append(chunk_id_counter)
             chunk_id_counter += 1
-        file_index[os.path.relpath(fpath, REPO_DIR)] = file_ids
+        file_index[to_rel_path(fpath)] = file_ids
 
     if not all_chunks:
         index_mgr = FAISSIndexManager()
         index_mgr.build(np.empty((0, 0), dtype=np.float32))
-        meta = {"chunks": [], "file_index": {}}
+        meta = {
+            "embedding_model": embedder.model_name,
+            "embedding_dim": embedder.dim,
+            "chunks": [],
+            "file_index": {},
+        }
         return index_mgr, meta
 
     contents = [chunk.content for chunk in all_chunks]
@@ -313,6 +380,10 @@ def build_index_from_docs(
     index_mgr.build(vectors)
 
     meta = {
+        # 记录建索引所用的模型与维度：更换模型后若忘记重建，加载时可立即发现
+        "embedding_model": embedder.model_name,
+        "embedding_dim": int(vectors.shape[1]),
+        "built_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "chunks": [_chunk_to_dict(c) for c in all_chunks],
         "file_index": file_index,
     }
@@ -324,7 +395,7 @@ def update_document(file_path: str, embedder: Optional[EmbeddingModel] = None) -
     if embedder is None:
         embedder = EmbeddingModel()
 
-    rel_path = os.path.relpath(file_path, REPO_DIR)
+    rel_path = to_rel_path(file_path)
     meta = load_chunk_meta()
     file_index = meta.get("file_index", {})
 
@@ -335,10 +406,35 @@ def update_document(file_path: str, embedder: Optional[EmbeddingModel] = None) -
     if not index_mgr.load():
         return False
 
+    ok, reason = check_index_compatibility(meta, embedder, index_mgr.dim)
+    if not ok:
+        print(
+            f"[vectorizer] 拒绝增量更新 {rel_path}：{reason}。"
+            "索引与当前 embedding 模型不同源，请先执行 "
+            "`update_index.py rebuild` 全量重建索引。",
+            file=sys.stderr,
+        )
+        return False
+
+    # 兼容旧版索引：借本次更新补齐元数据，后续即可严格校验
+    meta["embedding_model"] = embedder.model_name
+    meta["embedding_dim"] = embedder.dim
+
     old_ids = file_index.pop(rel_path, [])
+    # 兼容历史索引中按反斜杠写入的键，否则会找不到旧条目并重复入库
+    for legacy_key in [k for k in file_index if k.replace("\\", "/") == rel_path]:
+        old_ids.extend(file_index.pop(legacy_key, []))
     if old_ids:
-        index_mgr.remove_ids(old_ids)
-        meta["chunks"] = [c for c in meta["chunks"] if c["chunk_id"] not in old_ids]
+        # IndexFlat 的 remove_ids 按“向量位置”生效且会前移后续向量，
+        # 而 chunk_id 是自增编号，删除过其他文件后二者不再相等，
+        # 因此必须先把 chunk_id 换算成当前的实际位置再删除。
+        old_id_set = set(old_ids)
+        old_positions = [
+            pos for pos, c in enumerate(meta["chunks"]) if c["chunk_id"] in old_id_set
+        ]
+        if old_positions:
+            index_mgr.remove_ids(old_positions)
+        meta["chunks"] = [c for c in meta["chunks"] if c["chunk_id"] not in old_id_set]
 
     chunker = MarkdownChunker()
     try:
@@ -349,6 +445,8 @@ def update_document(file_path: str, embedder: Optional[EmbeddingModel] = None) -
         return False
 
     if not new_chunks:
+        # 文件存在但解析不出任何 chunk（空文件或异常格式）：旧条目已移除，需要显式告警
+        print(f"[vectorizer] {rel_path} 分块结果为空，已从索引中移除", file=sys.stderr)
         save_chunk_meta(meta)
         index_mgr.save()
         return True
@@ -366,6 +464,17 @@ def update_document(file_path: str, embedder: Optional[EmbeddingModel] = None) -
 
     vectors = embedder.encode(new_vectors_list, is_query=False)
     index_mgr.index.add(vectors)
+
+    # 写入前的最后一道防线：向量数与元数据条目数必须一致，
+    # 否则检索会因位置错位命中错误的 chunk 内容。
+    if index_mgr.ntotal != len(meta["chunks"]):
+        print(
+            f"[vectorizer] 索引与元数据数量不一致（向量 {index_mgr.ntotal} / "
+            f"元数据 {len(meta['chunks'])}），已放弃本次写入，请执行 "
+            "`update_index.py rebuild` 全量重建。",
+            file=sys.stderr,
+        )
+        return False
 
     file_index[rel_path] = new_ids
     meta["file_index"] = file_index

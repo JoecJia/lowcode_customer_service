@@ -1,16 +1,47 @@
 """Agent 核心服务：SSE 流过滤、上下文截断、Agent 多轮循环调度。"""
 
+import asyncio
 import json
 import os
 import re
 import sys
+import threading
+import time
 import urllib.error
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Callable, Iterator
 
-from config import DEBUG, MAX_AGENT_TURNS, MAX_TASK_CALLS, REPO_DIR
-from services.llm_service import build_ssl_context, parse_tasks, stream_chat_completions
+from config import (
+    ARK_TEXT_MODEL,
+    ARK_VISION_MODEL,
+    DEBUG,
+    MAX_AGENT_TURNS,
+    MAX_IDENTICAL_TASK_CALLS,
+    MAX_SAME_SKILL_CALLS,
+    MAX_TASK_CALLS,
+    REPO_DIR,
+)
+from services.message_content import content_weight, has_multimodal_part
+
+# ── 调试追踪 ──
+# ARK_DEBUG=1 打开追踪；若同时设置 ARK_TRACE_PATH，则同时落盘便于离线分析
+_TRACE_PATH = os.environ.get("ARK_TRACE_PATH", "").strip()
+_TASK_BLOCK_RE = re.compile(r"<task>[\s\S]*?</task>", re.IGNORECASE)
+
+
+def _trace(msg: str) -> None:
+    """DEBUG 模式下打印追踪信息；配置了 ARK_TRACE_PATH 时同时追加写入文件。"""
+    if not DEBUG:
+        return
+    print(msg, file=sys.stderr)
+    if _TRACE_PATH:
+        try:
+            with open(_TRACE_PATH, "a", encoding="utf-8") as fh:
+                fh.write(msg + "\n")
+        except OSError:
+            pass
+from services.llm_service import Task, ToolCall, build_ssl_context, stream_chat_completions
 from services.session_service import get_session_store
-from services.skill_service import dispatch_skill, format_task_result, get_system_messages
+from services.skill_service import dispatch_skill, format_tool_result, get_tools
 
 # ── 上下文截断阈值 ──
 MAX_CONTEXT_CHARS = 64000
@@ -28,18 +59,50 @@ _START_RAW_JSON = re.compile(r'\[\s*\{\s*"(?:name|type|task_type)"\s*:\s*"')
 _TAIL_PARTIAL_JSON = re.compile(r'^\[[^\]()]*$')
 
 
+class _StepBuilder:
+    """按事件到达顺序构造「思考过程」步骤序列，落库后供前端原样回放。
+
+    连续 reasoning token 合并成一个节点；遇到 content 或 task 则断开，
+    因此「思考 → 调用技能 → 再思考」的交错顺序不会因为字符串拼接而丢失。
+    """
+
+    def __init__(self) -> None:
+        self.steps: list[dict] = []
+        self._broken = True
+
+    def reasoning(self, text: str) -> None:
+        if self._broken or not self.steps or self.steps[-1]["kind"] != "reasoning":
+            self.steps.append({"kind": "reasoning", "text": text})
+        else:
+            self.steps[-1]["text"] += text
+        self._broken = False
+
+    def task(self, task_type: str, result: str, query: str = "") -> None:
+        step = {"kind": "task", "type": task_type, "result": result}
+        if query:
+            step["query"] = query
+        self.steps.append(step)
+        self._broken = True
+
+    def break_reasoning(self) -> None:
+        self._broken = True
+
+
 # ── 上下文截断 ──
 
 def truncate_messages(system_msgs: list[dict], history_msgs: list[dict]) -> list[dict]:
-    """上下文截断：从头部丢弃旧消息，保留最近轮次。"""
-    total = sum(len(m.get("content", "")) for m in system_msgs + history_msgs)
+    """上下文截断：从头部丢弃旧消息，保留最近轮次。
+
+    content 可能是字符串（纯文本）或多模态数组，统一用 content_weight 计权。
+    """
+    total = sum(content_weight(m.get("content", "")) for m in system_msgs + history_msgs)
     if total <= MAX_CONTEXT_CHARS:
         return system_msgs + history_msgs
 
     min_retain = MIN_RETAIN_ROUNDS * 2
     truncated = list(history_msgs)
     while len(truncated) > min_retain:
-        total = sum(len(m.get("content", "")) for m in system_msgs + truncated)
+        total = sum(content_weight(m.get("content", "")) for m in system_msgs + truncated)
         if total <= MAX_CONTEXT_CHARS:
             break
         truncated = truncated[2:]
@@ -68,7 +131,7 @@ def _partial_tag_len_at_end(s: str) -> int:
 
 
 def filter_task_stream(stream):
-    """过滤流式 content 中的 <task>...</task> 块和裸 JSON 数组，防止泄漏到前端。"""
+    """[LEGACY] 旧文本协议过滤函数；生产 Agent 循环已改用原生 tool_calls，仅保留给 debug 脚本。"""
     out = ""
     pending = ""
     in_block = 0
@@ -274,10 +337,45 @@ def _strip_raw_task_arrays(text: str) -> str:
 
 
 def clean_task_blocks(text: str) -> str:
-    """清除文本中所有 <task>...</task> 块和裸 JSON 数组。"""
+    """[LEGACY] 旧文本协议清理函数；生产链路不再调用，仅保留给 debug 脚本。"""
     text = re.sub(r'<task>[\s\S]*?</task>', '', text, flags=re.IGNORECASE)
     text = _strip_raw_task_arrays(text)
     return text.strip()
+
+
+# ── 同步流 → 异步流桥接 ──
+
+_STREAM_END = object()
+
+
+async def _async_stream(factory: Callable[[], Iterator[tuple[str, str | ToolCall]]]):
+    """在线程池中消费同步生成器，经 asyncio.Queue 桥接为异步流。
+
+    同步生成器（llm_service.stream_chat_completions）内部使用 urllib 阻塞读取，
+    直接在事件循环里迭代会阻塞所有并发请求。此函数把阻塞迭代搬到线程池，
+    通过 call_soon_threadsafe 把每个 token 投递回事件循环，由本异步生成器 yield。
+    """
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def produce():
+        try:
+            for item in factory():
+                loop.call_soon_threadsafe(queue.put_nowait, item)
+        except BaseException as exc:  # 异常也要传回事件循环，否则异步侧永久等待
+            loop.call_soon_threadsafe(queue.put_nowait, exc)
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, _STREAM_END)
+
+    threading.Thread(target=produce, daemon=True).start()
+
+    while True:
+        item = await queue.get()
+        if item is _STREAM_END:
+            break
+        if isinstance(item, BaseException):
+            raise item
+        yield item
 
 
 # ── 工具函数 ──
@@ -298,68 +396,168 @@ async def agent_loop_stream(
     api_key: str,
     messages: list[dict],
     session_id: str,
+    profile: str = "frontend",
+    operator: str = "",
 ) -> AsyncGenerator[str, None]:
-    """Agent 多轮对话循环：流式调用 LLM，解析 Task，调度 Skill，输出 SSE 事件。"""
+    """Agent 多轮对话循环：流式调用 LLM，解析 Task，调度 Skill，输出 SSE 事件。
+
+    profile 决定技能白名单与系统提示词；operator 是后台管理员用户名，供 context_editor 审计。
+    """
     ssl_context = build_ssl_context()
     store = get_session_store()
+    model_name = ARK_VISION_MODEL if has_multimodal_part(messages) else ARK_TEXT_MODEL
     task_calls = 0
-    last_task_fingerprints: list[str] = []
+    # 重复调用检测：分别统计「完全相同的任务」与「同一技能」的累计调用次数
+    identical_task_counts: dict[str, int] = {}
+    skill_call_counts: dict[str, int] = {}
 
     # 跨轮次累积：将多轮 agent 循环中的思考过程和最终回答分别累积
     all_content_parts: list[str] = []
     all_reasoning_parts: list[str] = []
+    # 「思考过程」结构化步骤时间线：与 SSE 事件同序，最终随 assistant 消息落库
+    steps_builder = _StepBuilder()
 
-    for turn in range(MAX_AGENT_TURNS):
-        payload = {
-            "model": "doubao-seed-2-0-pro-260215",
-            "messages": messages,
+    async def close_out(warning: str | None = None) -> AsyncGenerator[str, None]:
+        """异常退出时的统一收尾，保证用户始终能拿到最终回答。
+
+        背景：模型在前几轮通常只输出思考 + 被 <task> 过滤掉的规划文本，可见 content 为空。
+        一旦在「收敛轮」之前耗尽轮次/工具次数，原来的
+        `if final_content or final_reasoning` 就会跳过落库，
+        用户看到的是「思考过程滚了半天，最终回答一片空白」。
+
+        处理策略：
+          - 已有可见回答 → 直接落库结束（保持原有行为）
+          - 尚无可见回答 → 追加一轮「禁止调用工具」的指令，强制模型基于已获得的信息作答
+        """
+        if warning:
+            yield f"event: warning\ndata: {json.dumps({'content': warning})}\n\n"
+
+        existing = "".join(all_content_parts).strip()
+        if existing:
+            store.append_message(
+                session_id, "assistant", existing, "".join(all_reasoning_parts),
+                steps_builder.steps,
+            )
+            yield "event: done\ndata: {}\n\n"
+            return
+
+        forced_messages = messages + [
+            {
+                "role": "user",
+                "content": (
+                    "【系统指令】工具调用已达上限。请立即停止调用任何工具，"
+                    "直接基于上文已经获得的信息给出最终回答。"
+                ),
+            }
+        ]
+        forced_payload = {
+            "model": model_name,
+            "messages": forced_messages,
+            "tools": get_tools(profile),
+            "tool_choice": "none",
             "stream": True,
             "stream_options": {"include_usage": True},
-            "thinking": {"type": "enabled"},
+            "temperature": 0,
+            "thinking": {"type": "enabled", "reasoning_effort": "medium"},
+        }
+
+        answer_parts: list[str] = []
+        extra_reasoning: list[str] = []
+        try:
+            async for delta_type, text in _async_stream(
+                lambda: stream_chat_completions(api_key, forced_payload, ssl_context)
+            ):
+                if delta_type == "content":
+                    answer_parts.append(text)
+                    steps_builder.break_reasoning()
+                    yield f"event: content\ndata: {json.dumps({'content': text})}\n\n"
+                elif delta_type == "reasoning":
+                    extra_reasoning.append(text)
+                    steps_builder.reasoning(text)
+                    # 这一轮思考同样落库，前后端必须同时可见，否则刷新后顺序会多出一段
+                    yield f"event: reasoning\ndata: {json.dumps({'content': text})}\n\n"
+                elif delta_type == "tool_call":
+                    continue
+                elif delta_type == "error":
+                    _trace(f"[debug]   收尾作答出错：{text}")
+                    break
+        except Exception as exc:
+            _trace(f"[debug]   收尾作答异常：{exc}")
+
+        answer = "".join(answer_parts).strip()
+        if not answer:
+            # 极端兜底：连强制作答都为空，也要给用户一句可读的回应
+            answer = (
+                "抱歉，本次未能整理出完整答复。"
+                "您可以换个问法或补充一些关键信息，我再为您解答。"
+            )
+            yield f"event: content\ndata: {json.dumps({'content': answer})}\n\n"
+
+        if DEBUG:
+            _trace(f"[debug] 收尾作答完成：{len(answer)} 字")
+
+        store.append_message(
+            session_id,
+            "assistant",
+            answer,
+            "".join(all_reasoning_parts + extra_reasoning),
+            steps_builder.steps,
+        )
+        yield "event: done\ndata: {}\n\n"
+
+    for turn in range(MAX_AGENT_TURNS):
+        if DEBUG:
+            _trace(f"\n[debug] ===== turn {turn} 开始 =====")
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "tools": get_tools(profile),
+            "tool_choice": "auto",
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            # 任务规划环节需要确定性输出，固定为贪心解码
+            "temperature": 0,
+            "thinking": {"type": "enabled", "reasoning_effort": "medium"},
         }
 
         content_parts: list[str] = []
         reasoning_parts: list[str] = []
-        # raw_content_parts: 保存未经 filter_task_stream 过滤的原始内容，用于 task 解析
-        raw_content_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
         saw_think = False
 
         try:
-            # 直接流式处理，不缓冲所有 delta
-            # 使用 TeeCollector 在流式传输的同时收集原始 delta 用于 task 解析
-            collected: list[tuple[str, str]] = []
+            # 同步 urllib 流搬到线程池消费，避免阻塞事件循环（否则并发接口被卡 1~4s）
             llm_stream = stream_chat_completions(api_key, payload, ssl_context)
-
-            for delta_type, text in filter_task_stream(_tee_collect(llm_stream, collected)):
+            async for delta_type, item in _async_stream(lambda: llm_stream):
                 if delta_type == "reasoning":
-                    reasoning_parts.append(text)
+                    reasoning_parts.append(item)
+                    steps_builder.reasoning(item)
                     if not saw_think:
                         saw_think = True
                         yield f"event: reasoning\ndata: {json.dumps({'content': '<THINK_V2>'})}\n\n"
-                    yield f"event: reasoning\ndata: {json.dumps({'content': text})}\n\n"
+                    yield f"event: reasoning\ndata: {json.dumps({'content': item})}\n\n"
                 elif delta_type == "content":
                     if DEBUG:
-                        print(f"[agent] content delta: len={len(text)} {repr(text[:80])}", file=sys.stderr)
-                    content_parts.append(text)
+                        print(f"[agent] content delta: len={len(item)} {repr(item[:80])}", file=sys.stderr)
+                    content_parts.append(item)
+                    steps_builder.break_reasoning()
                     if saw_think:
                         saw_think = False
                         yield f"event: reasoning\ndata: {json.dumps({'content': '</think>'})}\n\n"
-                    yield f"event: content\ndata: {json.dumps({'content': text})}\n\n"
+                    yield f"event: content\ndata: {json.dumps({'content': item})}\n\n"
+                elif delta_type == "tool_call":
+                    tool_calls.append(item)
                 elif delta_type == "error":
-                    yield f"event: error\ndata: {json.dumps({'content': text})}\n\n"
+                    yield f"event: error\ndata: {json.dumps({'content': item})}\n\n"
                     if all_content_parts or all_reasoning_parts:
                         store.append_message(
                             session_id,
                             "assistant",
-                            clean_task_blocks("".join(all_content_parts)),
+                            "".join(all_content_parts),
                             "".join(all_reasoning_parts),
+                            steps_builder.steps,
                         )
                     return
-
-            # 从收集的原始 delta 中提取 raw content（含 <task> 标签，用于 task 解析）
-            for dt, text in collected:
-                if dt == "content":
-                    raw_content_parts.append(text)
 
             if saw_think:
                 yield f"event: reasoning\ndata: {json.dumps({'content': '</think>'})}\n\n"
@@ -370,8 +568,9 @@ async def agent_loop_stream(
                 store.append_message(
                     session_id,
                     "assistant",
-                    clean_task_blocks("".join(all_content_parts)),
+                    "".join(all_content_parts),
                     "".join(all_reasoning_parts),
+                    steps_builder.steps,
                 )
             return
         except Exception as e:
@@ -381,36 +580,34 @@ async def agent_loop_stream(
                 store.append_message(
                     session_id,
                     "assistant",
-                    clean_task_blocks("".join(all_content_parts)),
+                    "".join(all_content_parts),
                     "".join(all_reasoning_parts),
+                    steps_builder.steps,
                 )
             return
 
         assistant_content = "".join(content_parts)
         assistant_reasoning = "".join(reasoning_parts)
 
-        # 累积内容：content 中的任务块已被 filter_task_stream 过滤，直接累积
         if assistant_content:
             all_content_parts.append(assistant_content)
         if assistant_reasoning:
             all_reasoning_parts.append(assistant_reasoning)
 
-        # 使用 raw_content + reasoning 进行 task 解析
-        # raw_content_parts 包含未过滤的 <task> 标签，parse_tasks 需要它们
-        raw_content = "".join(raw_content_parts)
-        combined = raw_content + "\n" + assistant_reasoning
-        tasks = parse_tasks(combined)
-
         if DEBUG:
-            print(
-                f"\n[debug] turn={turn} content_len={len(assistant_content)} "
-                f"reasoning_len={len(assistant_reasoning)} tasks={len(tasks)}",
-                file=sys.stderr,
+            _trace(
+                f"[debug] turn={turn} | content={len(assistant_content)}字 | "
+                f"reasoning={len(assistant_reasoning)}字 | tool_calls={len(tool_calls)}"
             )
+            for _i, _call in enumerate(tool_calls, 1):
+                _trace(
+                    f"[debug]   tool_call#{_i} name={_call.name} "
+                    f"args={_call.arguments[:120]!r}"
+                )
 
-        if not tasks:
-            # 所有任务已完成，保存最终结果：一条 assistant 消息
-            final_content = clean_task_blocks("".join(all_content_parts))
+        if not tool_calls:
+            # 无工具调用：模型已给出最终答复，落库后结束
+            final_content = "".join(all_content_parts).strip()
             final_reasoning = "".join(all_reasoning_parts)
             if final_content or final_reasoning:
                 store.append_message(
@@ -418,52 +615,95 @@ async def agent_loop_stream(
                     "assistant",
                     final_content,
                     final_reasoning,
+                    steps_builder.steps,
                 )
             yield "event: done\ndata: {}\n\n"
             return
 
-        for task in tasks:
+        # 原生 Function Calling 协议：先把带 tool_calls 的 assistant 消息加入当前请求，
+        # 再逐条回注 role=tool 的结果。两者都只存在于本轮 messages，不落库。
+        messages.append({
+            "role": "assistant",
+            "content": assistant_content or None,
+            "tool_calls": [call.to_message() for call in tool_calls],
+        })
+
+        for call in tool_calls:
             task_calls += 1
             if task_calls > MAX_TASK_CALLS:
-                yield f"event: warning\ndata: {json.dumps({'content': 'Too many task calls, stopping.'})}\n\n"
-                final_content = clean_task_blocks("".join(all_content_parts))
-                final_reasoning = "".join(all_reasoning_parts)
-                if final_content or final_reasoning:
-                    store.append_message(session_id, "assistant", final_content, final_reasoning)
-                yield "event: done\ndata: {}\n\n"
+                async for chunk in close_out("工具调用次数已达上限，正在为您整理答复…"):
+                    yield chunk
                 return
+
+            try:
+                arguments = json.loads(call.arguments or "{}")
+                if not isinstance(arguments, dict):
+                    arguments = {}
+            except (json.JSONDecodeError, TypeError):
+                arguments = {}
+
+            task = Task(
+                task_type=call.name,
+                raw=call.arguments or "{}",
+                query=arguments.get("query") or arguments.get("conversation_summary"),
+                top_k=arguments.get("top_k") or arguments.get("k"),
+                arguments=arguments,
+            )
 
             fingerprint = (
                 f"{task.task_type}|{task.query}|{task.top_k}|"
-                f"{json.dumps(task.arguments or {}, ensure_ascii=False)}"
+                f"{json.dumps(arguments, sort_keys=True, ensure_ascii=False)}"
             )
-            last_task_fingerprints.append(fingerprint)
-            if len(last_task_fingerprints) >= 4 and len(set(last_task_fingerprints[-3:])) == 1:
-                yield f"event: warning\ndata: {json.dumps({'content': 'Repeated task detected, stopping.'})}\n\n"
-                final_content = clean_task_blocks("".join(all_content_parts))
-                final_reasoning = "".join(all_reasoning_parts)
-                if final_content or final_reasoning:
-                    store.append_message(session_id, "assistant", final_content, final_reasoning)
-                yield "event: done\ndata: {}\n\n"
+            identical_task_counts[fingerprint] = identical_task_counts.get(fingerprint, 0) + 1
+            skill_call_counts[task.task_type] = skill_call_counts.get(task.task_type, 0) + 1
+
+            if identical_task_counts[fingerprint] > MAX_IDENTICAL_TASK_CALLS:
+                async for chunk in close_out("检测到完全相同的任务被重复执行，正在为您整理答复…"):
+                    yield chunk
+                return
+            if skill_call_counts[task.task_type] > MAX_SAME_SKILL_CALLS:
+                async for chunk in close_out(
+                    f"技能 {task.task_type} 调用次数过多，正在为您整理答复…"
+                ):
+                    yield chunk
                 return
 
-            result_text = await dispatch_skill(REPO_DIR, task)
+            _t_dispatch = time.perf_counter()
+            result = await dispatch_skill(
+                REPO_DIR, task, profile=profile, operator=operator, session_id=session_id,
+            )
+            result_text = result.text
+            if DEBUG:
+                _trace(
+                    f"[debug]   dispatch {task.task_type} 耗时 "
+                    f"{(time.perf_counter() - _t_dispatch) * 1000:.0f}ms，返回 {len(result_text)} 字，"
+                    f"事件 {len(result.events)} 个"
+                )
 
-            yield f"event: task\ndata: {json.dumps({'type': task.task_type, 'status': 'executed', 'result': result_text})}\n\n"
+            # 受控工具产生的结构化事件（如 change）透传给前端，驱动变更卡片渲染
+            for ev in result.events:
+                yield (
+                    f"event: {ev.get('name', 'task')}\ndata: "
+                    f"{json.dumps(ev.get('data', {}), ensure_ascii=False)}\n\n"
+                )
 
-            task_msg = format_task_result(task.task_type, result_text)
-            messages.append(task_msg)
-            store.append_message(session_id, task_msg["role"], task_msg["content"])
+            steps_builder.task(task.task_type, result_text, task.query or "")
 
-        if turn >= MAX_AGENT_TURNS - 1 and task_calls > 0:
-            yield f"event: warning\ndata: {json.dumps({'content': 'Max turns reached.'})}\n\n"
+            task_payload = {
+                "type": task.task_type,
+                "status": "executed",
+                "result": result_text,
+            }
+            if task.query:
+                task_payload["query"] = task.query
+            yield f"event: task\ndata: {json.dumps(task_payload)}\n\n"
+
+            # role=tool 回注仅在当前请求 messages 中有效，不落库。
+            messages.append(format_tool_result(call.id, result_text))
 
     # 循环结束（达到最大轮次）
-    final_content = clean_task_blocks("".join(all_content_parts))
-    final_reasoning = "".join(all_reasoning_parts)
-    if final_content or final_reasoning:
-        store.append_message(session_id, "assistant", final_content, final_reasoning)
-    yield "event: done\ndata: {}\n\n"
+    async for chunk in close_out("已达到最大推理轮次，正在为您整理答复…"):
+        yield chunk
 
 
 async def empty_stream(session_id: str) -> AsyncGenerator[str, None]:

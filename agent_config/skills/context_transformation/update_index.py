@@ -11,6 +11,7 @@ from agent_config.skills.context_transformation.vectorizer import (
     iter_md_files,
     load_chunk_meta,
     save_chunk_meta,
+    to_rel_path,
     update_document,
 )
 
@@ -21,7 +22,7 @@ def cmd_update(file_path: str) -> int:
         print(f"Error: file not found: {abs_path}", file=sys.stderr)
         return 1
 
-    rel = os.path.relpath(abs_path, REPO_DIR)
+    rel = to_rel_path(abs_path)
     print(f"Updating index for: {rel}")
 
     t0 = time.time()
@@ -64,6 +65,9 @@ def cmd_status() -> int:
     n_chunks = len(meta.get("chunks", []))
     n_files = len(meta.get("file_index", {}))
     print(f"Index status: {n_chunks} chunks across {n_files} files")
+    print(f"Embedding   : {meta.get('embedding_model', '(未记录)')} "
+          f"({meta.get('embedding_dim', '?')} dim)")
+    print(f"Built at    : {meta.get('built_at', '(未记录)')}")
     return 0
 
 

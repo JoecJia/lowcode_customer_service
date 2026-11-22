@@ -26,7 +26,11 @@ __pycache__/
 .direnv/
 
 # FAISS vector index (auto-generated, large binary)
-backend/context/.faiss/
+agent_config/context/.faiss/
+
+# Context 变更暂存区/备份区（运行时数据，不入库）
+agent_config/context/.staging/
+agent_config/context/.backup/
 
 # SQLite database (auto-generated)
 backend/data/
@@ -44,6 +48,13 @@ agent_config/data/
 .codebuddy/
 venv/
 
+# 本地工具数据（不上传）
+.codebuddy/
+.playwright-cli/
+
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Local reference materials (passport integration, not versioned)
+对接passport资料/

@@ -1,10 +1,70 @@
 import { authFetch } from './auth'
 
+export interface ChatTask {
+  type: string
+  result: string
+  query?: string
+}
+
+export type AttachmentKind = 'image' | 'pdf'
+
+export interface ChatAttachment {
+  id: string
+  kind: AttachmentKind
+  name: string
+  mime: string
+  size: number
+  width?: number
+  height?: number
+  page_count?: number | null
+  sha256?: string
+  storage?: { type: string; ref: string }
+  preview_url?: string
+}
+
+/** 前端待发送附件；图片用 dataUrl，PDF 用裸 base64 */
+export interface PendingAttachment {
+  id: string
+  kind: AttachmentKind
+  name: string
+  mime: string
+  size: number
+  dataUrl?: string
+  base64?: string
+  previewUrl?: string
+  status: 'ready' | 'error'
+  error?: string
+}
+
+export interface AttachmentPayload {
+  id?: string
+  kind: AttachmentKind
+  name: string
+  mime: string
+  size: number
+  data_url?: string
+  base64?: string
+}
+
+/** 后端落库的「思考过程」步骤：reasoning 片段与 task 按到达顺序交错 */
+export interface ChatStep {
+  kind: 'reasoning' | 'task'
+  text?: string
+  type?: string
+  result?: string
+  query?: string
+}
+
 export interface ChatMessage {
   id?: number
   role: 'user' | 'assistant' | 'system'
   content: string
+  attachments?: ChatAttachment[]
   reasoning_content?: string
+  /** 结构化步骤时间线；新消息直接用它还原思考过程 */
+  steps?: ChatStep[]
+  /** 旧数据（无 steps）兼容回退用 */
+  tasks?: ChatTask[]
   created_at?: number
 }
 
@@ -33,7 +93,18 @@ export interface ListMessagesResponse {
 const BASE = '/api'
 
 // ==================== DEBUG 开关 ====================
-const DEBUG_STREAM = true
+// 逐 token 日志默认关闭：每个 token 都要做字符串切片 + console 调用，
+// DevTools 打开时开销尤其明显（会直接拖慢流式观感）。
+// 需要排查流式问题时，在浏览器控制台执行：
+//   localStorage.setItem('chat_debug', '1')  然后刷新页面
+function readDebugFlag(): boolean {
+  try {
+    return localStorage.getItem('chat_debug') === '1'
+  } catch {
+    return false
+  }
+}
+const DEBUG_STREAM = import.meta.env.DEV && readDebugFlag()
 
 export async function listSessions(
   limit: number = 10,
@@ -97,30 +168,16 @@ export async function checkFeedback(sessionId: string): Promise<{ has_feedback: 
   return await resp.json()
 }
 
-/**
- * 强制浏览器渲染一帧。
- * 先通过 setTimeout(0) 让出到 macrotask 队列（Vue 的微任务刷新得以执行），
- * 再通过 requestAnimationFrame 等待浏览器完成绘制帧，
- * 确保页面呈现「逐 token 弹出」的流式效果。
- */
-function forceRenderFrame(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => resolve())
-      })
-    }, 0)
-  })
-}
-
 export function streamChat(
   sessionId: string,
   message: string,
   onContent: (text: string) => void,
   onReasoning: (text: string) => void,
-  onTask: (type: string, result: string) => void,
+  onTask: (type: string, result: string, query: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
+  attachments: AttachmentPayload[] = [],
+  onTitle?: (title: string) => void,
 ): AbortController {
   const controller = new AbortController()
   const token = localStorage.getItem('auth_token')
@@ -139,7 +196,12 @@ export function streamChat(
   fetch(`${BASE}/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ session_id: sessionId, message, new_session: false }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      new_session: false,
+      attachments,
+    }),
     signal: controller.signal,
   }).then(async (resp) => {
     if (resp.status === 401) {
@@ -212,10 +274,16 @@ export function streamChat(
             if (DEBUG_STREAM) {
               console.debug(`[SSE] 🔧 task #${taskCount}: type=${data.type}`)
             }
-            onTask(data.type || '', data.result || '')
+            onTask(data.type || '', data.result || '', data.query || '')
             break
           case 'error':
             onError(data.content || 'Unknown error')
+            break
+          case 'title':
+            if (DEBUG_STREAM) {
+              console.debug(`[SSE] 🏷️ title: "${data.title || ''}"`)
+            }
+            onTitle?.(data.title || '')
             break
           case 'done':
             onDone()
@@ -240,14 +308,12 @@ export function streamChat(
 
       for (const line of lines) {
         if (line === '') {
-          const eventType = flushEvent()
-          // content / reasoning 事件后强制渲染一帧，保证逐 token 流式显示
-          if (eventType === 'content' || eventType === 'reasoning') {
-            if (DEBUG_STREAM) {
-              console.debug(`[SSE] ⏸️  yield frame after ${eventType}`)
-            }
-            await forceRenderFrame()
-          }
+          // 这里曾对每个 content/reasoning 事件 await 两帧渲染（约 33ms），
+          // 目的是营造「逐 token 弹出」效果。副作用是：豆包按单字符增量推送，
+          // 于是每字都阻塞一次，把可见速率钉在约 30 字/秒（后端实测 100+ 字/秒），
+          // 同时卡住 reader.read() 造成网络反压，后台标签页还会因 rAF 暂停而假死。
+          // Vue 的响应式更新本身会按微任务/帧批处理，直接放行即可保持流式观感。
+          flushEvent()
         } else {
           eventLines.push(line)
         }

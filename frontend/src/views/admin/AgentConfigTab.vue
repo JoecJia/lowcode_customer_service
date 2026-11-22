@@ -3,6 +3,10 @@ import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import { getAgentConfigTree, getAgentConfigFile } from '../../api/admin'
+import ContextBatchHistoryModal from '../../components/ContextBatchHistoryModal.vue'
+
+const historyVisible = ref(false)
+const historyRef = ref<InstanceType<typeof ContextBatchHistoryModal> | null>(null)
 
 interface TreeNode {
   name: string
@@ -91,7 +95,13 @@ function renderMarkdown(raw: string): string {
   <div class="tab-agent">
     <!-- 左侧文件树 -->
     <div class="file-tree-panel">
-      <div class="tree-header">agent_config/</div>
+      <div class="tree-header">
+        <span>agent_config/</span>
+        <button class="history-btn" @click="historyRef?.open()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          变更记录
+        </button>
+      </div>
       <el-tree
         ref="treeRef"
         :data="treeData"
@@ -119,16 +129,20 @@ function renderMarkdown(raw: string): string {
 
     <!-- 右侧预览区 -->
     <div class="md-preview-panel">
+      <div class="preview-toolbar">
+        <span class="preview-toolbar-title">{{ currentFilePath || 'Agent 配置' }}</span>
+      </div>
       <template v-if="!currentFilePath">
         <div class="md-placeholder">请在左侧选择文件进行预览</div>
       </template>
       <template v-else>
-        <div class="md-file-title">{{ currentFilePath }}</div>
         <div class="md-content" v-loading="loadingContent">
           <div v-if="currentFileContent" v-html="renderMarkdown(currentFileContent)" class="markdown-body"></div>
         </div>
       </template>
     </div>
+
+    <ContextBatchHistoryModal ref="historyRef" v-model:visible="historyVisible" agent-name="Agent 配置" />
   </div>
 </template>
 
@@ -150,12 +164,23 @@ function renderMarkdown(raw: string): string {
 }
 
 .tree-header {
-  padding: 12px 16px;
+  padding: 12px 12px 12px 16px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
 }
+.tree-header .history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tree-header .history-btn svg { width: 14px; height: 14px; }
 
 .file-tree-panel :deep(.el-tree) {
   padding: 8px 0;
@@ -211,14 +236,33 @@ function renderMarkdown(raw: string): string {
   color: var(--color-text-tertiary);
 }
 
-.md-file-title {
-  padding: 12px 20px;
-  font-size: 13px;
-  color: var(--color-text-tertiary);
+.preview-toolbar {
+  padding: 10px 20px;
   border-bottom: 1px solid var(--color-border-light);
-  font-family: monospace;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   flex-shrink: 0;
 }
+.preview-toolbar-title {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  font-family: monospace;
+}
+.history-btn {
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background .2s ease;
+}
+.history-btn:hover { background: var(--color-primary-hover); }
 
 .md-content {
   flex: 1;

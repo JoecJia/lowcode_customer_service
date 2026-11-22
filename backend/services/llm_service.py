@@ -36,6 +36,25 @@ class Task:
     arguments: dict | None = None
 
 
+@dataclass
+class ToolCall:
+    """方舟流式返回的原生 tool_call 分片累积结果。"""
+
+    index: int
+    id: str = ""
+    type: str = "function"
+    name: str = ""
+    arguments: str = ""
+
+    def to_message(self) -> dict:
+        """还原为 OpenAI/方舟兼容的 assistant.tool_calls 元素。"""
+        return {
+            "id": self.id,
+            "type": self.type or "function",
+            "function": {"name": self.name, "arguments": self.arguments or "{}"},
+        }
+
+
 def read_text_file(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
@@ -194,10 +213,11 @@ def stream_chat_completions(
     api_key: str,
     payload: dict,
     ssl_context: ssl.SSLContext,
-) -> Generator[tuple[str, str], None, None]:
-    """调用火山引擎 Chat Completions API，返回 (delta_type, text) 的流式生成器。
+) -> Generator[tuple[str, str | ToolCall], None, None]:
+    """调用火山方舟 Chat Completions API，返回 (delta_type, payload) 流式生成器。
 
-    对 502/503/504 等临时性服务端错误自动重试，最多 3 次，间隔递增。
+    delta_type 取值为 reasoning / content / tool_call / error；tool_call 的 payload
+    为累积完成的 ToolCall 对象。对 502/503/504 等临时错误自动重试，最多 3 次。
     """
     RETRIABLE_STATUSES = {502, 503, 504}
     MAX_RETRIES = 3
@@ -208,8 +228,10 @@ def stream_chat_completions(
     }
 
     last_error = None
+    tool_calls: dict[int, ToolCall] = {}
 
     for attempt in range(MAX_RETRIES + 1):
+        tool_calls.clear()
         req = urllib.request.Request(
             ARK_CHAT_COMPLETIONS_URL,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -227,6 +249,10 @@ def stream_chat_completions(
 
                 for data in iter_sse_data_lines(resp):
                     if data == "[DONE]":
+                        for idx in sorted(tool_calls):
+                            call = tool_calls[idx]
+                            if call.name:
+                                yield ("tool_call", call)
                         return
 
                     try:
@@ -243,11 +269,28 @@ def stream_chat_completions(
                     reasoning = delta.get("reasoning_content")
                     if reasoning:
                         yield ("reasoning", reasoning)
-                        continue
 
                     content = delta.get("content")
                     if content:
                         yield ("content", content)
+
+                    for item in delta.get("tool_calls") or []:
+                        idx = int(item.get("index") or 0)
+                        call = tool_calls.setdefault(idx, ToolCall(index=idx))
+                        if item.get("id"):
+                            call.id = str(item["id"])
+                        if item.get("type"):
+                            call.type = str(item["type"])
+                        fn = item.get("function") or {}
+                        if fn.get("name"):
+                            call.name += str(fn["name"])
+                        if fn.get("arguments"):
+                            call.arguments += str(fn["arguments"])
+
+                for idx in sorted(tool_calls):
+                    call = tool_calls[idx]
+                    if call.name:
+                        yield ("tool_call", call)
                 return  # 正常结束，不再重试
 
         except urllib.error.HTTPError as e:

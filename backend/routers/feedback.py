@@ -75,6 +75,8 @@ async def list_feedbacks(
             where_clause = "WHERE f.status = 'pending'"
         elif status == "resolved":
             where_clause = "WHERE f.status = 'resolved'"
+        elif status == "no_need":
+            where_clause = "WHERE f.status = 'no_need'"
 
         # 总数
         total_row = conn.execute(
@@ -224,3 +226,21 @@ async def resolve_feedback(
         "ok": True,
         "message": f"已保存 {saved_count} 条 Q&A 到 FAQ 知识库，索引已更新",
     }
+
+
+@router.post("/admin/feedbacks/{feedback_id}/no-need")
+async def mark_feedback_no_need(
+    feedback_id: int,
+    admin: dict = Depends(require_admin),
+):
+    with get_db() as conn:
+        cur = conn.execute(
+            "UPDATE feedback SET status = 'no_need' WHERE id = ?",
+            (feedback_id,),
+        )
+        conn.commit()
+
+    if cur.rowcount == 0:
+        raise HTTPException(status_code=404, detail="反馈不存在")
+
+    return {"ok": True, "message": "已标记为无需处理"}
