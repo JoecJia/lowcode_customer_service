@@ -17,10 +17,8 @@ for _path in (_BACKEND_DIR, os.path.join(os.path.dirname(_BACKEND_DIR), "agent_c
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from config import APP_ORIGINS
 from routers.chat import router as chat_router
 from routers.auth import router as auth_router
-from routers.passport import router as passport_router
 from routers.feedback import router as feedback_router
 from routers.admin import router as admin_router
 from services.mcp_service import mcp_manager
@@ -75,9 +73,7 @@ app = FastAPI(title="低代码智能客服", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    # 注意：allow_origins=["*"] 与 allow_credentials=True 不能同时使用（对 Cookie 非法），
-    # 这里改用显式来源白名单（APP_ORIGINS，默认 https://service.cxlowcode.com）。
-    allow_origins=APP_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -107,7 +103,6 @@ async def add_no_cache_header(request, call_next):
 
 app.include_router(chat_router)
 app.include_router(auth_router)
-app.include_router(passport_router)
 app.include_router(feedback_router)
 app.include_router(admin_router)
 
